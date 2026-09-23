@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: pointage-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_KEY
+        valueFromSecret: APP_KEY
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        value: postgres
+      - key: DB_PORT
+        value: 5432
+      - key: DB_DATABASE
+        value: pointage
+      - key: DB_USERNAME
+        value: postgres
+      - key: DB_PASSWORD
+        valueFromSecret: DB_PASSWORD
+      - key: SANCTUM_STATE_DOMAIN
+        value: pointage-frontend.vercel.app
+      - key: SESSION_DOMAIN
+        value: .onrender.com
+
+databases:
+  - name: pointage-db
+    databaseName: pointage
+    user: postgres
+    userValueFromSecret: DB_PASSWORD

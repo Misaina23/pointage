@@ -7,25 +7,25 @@ services:
     envVars:
       - key: APP_KEY
         valueFromSecret: APP_KEY
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_URL
+        value: https://pointage-api.onrender.com
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_HOST
-        value: postgres
+        value: dpg-dapuh4favr4c73c49jo0-a
       - key: DB_PORT
         value: 5432
       - key: DB_DATABASE
-        value: pointage
+        value: minister_9ndm
       - key: DB_USERNAME
-        value: postgres
+        value: misaina
       - key: DB_PASSWORD
-        valueFromSecret: DB_PASSWORD
-      - key: SANCTUM_STATE_DOMAIN
-        value: pointage-frontend.vercel.app
+        value: fdaDsevgniuiS50B0KFAeGXXxDVyN4FA
+      - key: SANCTUM_STATEFUL_DOMAINS
+        value: pointage-frontend.vercel.app,pointage-frontend.vercel.app
       - key: SESSION_DOMAIN
         value: .onrender.com
-
-databases:
-  - name: pointage-db
-    databaseName: pointage
-    user: postgres
-    userValueFromSecret: DB_PASSWORD

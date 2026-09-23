@@ -1,0 +1,40 @@
+# Docker build exclusions
+node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.git
+.gitignore
+Dockerfile
+.dockerignore
+README.md
+
+# Backend
+/backend/vendor
+/backend/composer
+/backend/public/build
+/backend/public/hot
+/backend/.env
+/backend/.env.backup
+/backend/.env.production
+
+# Frontend
+/frontend/node_modules
+/frontend/dist
+/frontend/.env
+/frontend/.env.production
+
+# Mobile
+/mobile/node_modules
+/mobile/.env
+/mobile/.env.production
+
+# IDE
+.idea
+.vscode
+.fleet
+.DS_Store
+Thumbs.db
+
+# Kilo
+.kilo

@@ -4,6 +4,7 @@ services:
     runtime: docker
     plan: free
     healthCheckPath: /api/health
+    dockerfilePath: backend/Dockerfile
     envVars:
       - key: APP_KEY
         valueFromSecret: APP_KEY

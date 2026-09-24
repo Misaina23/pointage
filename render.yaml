@@ -2,6 +2,7 @@ services:
   - type: web
     name: pointage-api
     runtime: docker
+    rootDir: .
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: free

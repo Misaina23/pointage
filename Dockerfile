@@ -16,10 +16,9 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
-COPY backend/composer.json backend/composer.lock ./
-RUN composer install --no-dev --optimize-autoloader --no-interaction
-
 COPY backend/ ./
+
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 RUN php artisan key:generate --force
 

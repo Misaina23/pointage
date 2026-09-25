@@ -20,8 +20,6 @@ COPY backend/ ./
 
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-RUN php artisan key:generate --force
-
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 RUN chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 

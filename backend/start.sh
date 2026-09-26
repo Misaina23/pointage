@@ -1,4 +1,5 @@
 #!/bin/bash
+# Version: 2026-09-26-02 - Force cache bust for OPcache JIT fix
 
 set -e
 

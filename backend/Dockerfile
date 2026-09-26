@@ -1,6 +1,6 @@
 FROM php:8.2-fpm
 
-ARG CACHE_BUST=2026-09-26-04
+ARG CACHE_BUST=2026-09-26-05
 
 RUN apt-get update && apt-get install -y \
     git \
@@ -29,6 +29,8 @@ RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 RUN chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
 EXPOSE 8000
+
+RUN echo "Cache bust: ${CACHE_BUST}"
 
 COPY start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh

@@ -1,6 +1,6 @@
 FROM php:8.2-fpm
 
-ARG CACHE_BUST=2026-09-26-02
+ARG CACHE_BUST=2026-09-26-04
 
 RUN apt-get update && apt-get install -y \
     git \

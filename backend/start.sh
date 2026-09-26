@@ -4,6 +4,10 @@ set -e
 
 echo "Starting Laravel API Backend..."
 
+# Disable OPcache JIT to prevent segmentation faults in PHP 8.2 CLI
+export PHP_OPCACHE_JIT=off
+export PHP_MEMORY_LIMIT=512M
+
 echo "PHP version:"
 php -v
 
@@ -11,16 +15,16 @@ echo "Laravel version:"
 php artisan --version
 
 echo "Running database migrations..."
-php artisan migrate --force
+php -d opcache.jit=off -d memory_limit=512M artisan migrate --force
 
 echo "Caching configuration..."
-php artisan config:cache
+php -d opcache.jit=off -d memory_limit=512M artisan config:cache
 
 echo "Caching routes..."
-php artisan route:cache
+php -d opcache.jit=off -d memory_limit=512M artisan route:cache
 
 echo "Caching views..."
-php artisan view:cache
+php -d opcache.jit=off -d memory_limit=512M artisan view:cache
 
 echo "Starting PHP-FPM server..."
 php-fpm

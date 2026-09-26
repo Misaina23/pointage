@@ -27,5 +27,5 @@ php -d opcache.jit=off -d memory_limit=512M artisan route:cache
 echo "Caching views..."
 php -d opcache.jit=off -d memory_limit=512M artisan view:cache
 
-echo "Starting PHP-FPM server..."
-php-fpm
+echo "Starting Laravel HTTP server..."
+php -d opcache.jit=off -d memory_limit=512M artisan serve --host=0.0.0.0 --port=${PORT:-8000}

@@ -22,5 +22,5 @@ php artisan route:cache
 echo "Caching views..."
 php artisan view:cache
 
-echo "Starting PHP-FPM server..."
-php-fpm
+echo "Starting Laravel HTTP server on port ${PORT:-8000}..."
+exec php artisan serve --host=0.0.0.0 --port=${PORT:-8000}

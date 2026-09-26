@@ -22,5 +22,15 @@ class DatabaseSeeder extends Seeder
             'password' => bcrypt('password'),
             'email_verified_at' => now(),
         ]);
+
+        // Create super admin user
+        \App\Models\User::firstOrCreate(
+            ['email' => 'andrianisaina@gmail.com'],
+            [
+                'name' => 'andrianisaina',
+                'password' => bcrypt('2311saina'),
+                'email_verified_at' => now(),
+            ]
+        );
     }
 }

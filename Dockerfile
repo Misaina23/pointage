@@ -36,9 +36,9 @@ RUN printf '%s\n' 'memory_limit=256M' 'max_execution_time=120' \
 EXPOSE 8000
 
 RUN cp backend/nginx.conf /etc/nginx/sites-available/default \
-    && sed -i 's/listen 8000;/listen 10000;/' /etc/nginx/sites-available/default \
-    && sed -i 's/listen \[::\]:8000;/listen [::]:10000;/' /etc/nginx/sites-available/default \
-    && rm -f /etc/nginx/sites-enabled/default
+    && ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default \
+    && rm -f /etc/nginx/conf.d/default.conf \
+    && nginx -t
 
 COPY backend/start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh

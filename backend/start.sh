@@ -43,8 +43,12 @@ echo "Caching views..."
 run_artisan "view:cache" view:cache || echo "!!! view:cache failed, continuing"
 
 PORT="${PORT:-10000}"
-sed -i "s/listen 10000;/listen ${PORT};/" /etc/nginx/sites-available/default
-sed -i "s/listen \[::\]:10000;/listen [::]:${PORT};/" /etc/nginx/sites-available/default
+sed -i -E "s#listen (\[:::\])?[0-9]+;#listen \1${PORT};#g" /etc/nginx/sites-available/default
+
+echo "Active nginx server block:"
+grep -n "listen" /etc/nginx/sites-available/default
+
+nginx -t
 
 echo "Starting PHP-FPM on port 9000..."
 php-fpm --daemonize

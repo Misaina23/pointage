@@ -57,8 +57,5 @@ npm install
 npm start
 ```
 
-## Deployment
-- Backend: Render (PostgreSQL)
-- Frontend: Vercel
-- Mobile: EAS Build
+
 

@@ -27,7 +27,7 @@ services:
       - key: DB_USERNAME
         value: misaina
       - key: DB_PASSWORD
-        value: fdaDsevgniuiS50B0KFAeGXXxDVyN4FA
+        sync: false
       - key: SANCTUM_STATEFUL_DOMAINS
         value: pointage-frontend.vercel.app,pointage-mesupres.vercel.app
       - key: SESSION_DOMAIN

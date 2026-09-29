@@ -62,4 +62,3 @@ npm start
 - Frontend: Vercel
 - Mobile: EAS Build
 
-See `render.yaml` and `vercel.json` for deployment configs.

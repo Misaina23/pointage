@@ -1,4 +1,6 @@
-FROM php:8.2-fpm
+FROM php:8.3-fpm
+
+ARG CACHE_BUST=2026-09-26-06
 
 RUN apt-get update && apt-get install -y \
     git \
@@ -20,10 +22,16 @@ COPY . ./
 
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
+RUN printf '%s\n' 'opcache.enable_cli=0' 'opcache.jit=off' 'opcache.jit_buffer_size=0' \
+    > /usr/local/etc/php/conf.d/zz-custom.ini \
+    && echo "memory_limit=256M" >> /usr/local/etc/php/conf.d/zz-custom.ini
+
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 RUN chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
 EXPOSE 8000
+
+RUN echo "Cache bust: ${CACHE_BUST}"
 
 COPY start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh

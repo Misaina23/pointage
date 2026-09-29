@@ -14,6 +14,7 @@ return [
         'exp://localhost:8081',
         'exp://127.0.0.1:8081',
         'https://pointage-frontend.vercel.app',
+        'https://pointage-mesupres.vercel.app',
     ],
 
     'allowed_origins_patterns' => [

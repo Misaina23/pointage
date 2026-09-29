@@ -22,7 +22,8 @@ COPY . ./
 
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-RUN echo "opcache.jit=off" > /usr/local/etc/php/conf.d/zz-custom.ini \
+RUN printf '%s\n' 'opcache.enable_cli=0' 'opcache.jit=off' 'opcache.jit_buffer_size=0' \
+    > /usr/local/etc/php/conf.d/zz-custom.ini \
     && echo "memory_limit=256M" >> /usr/local/etc/php/conf.d/zz-custom.ini
 
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache

@@ -1,4 +1,4 @@
-FROM php:8.2-fpm
+FROM php:8.3-fpm
 
 RUN apt-get update && apt-get install -y \
     git \
@@ -22,6 +22,11 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 RUN chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+
+# Laravel's `artisan serve` runs under the CLI SAPI. Keep OPcache (and JIT)
+# disabled there; this also matches backend/Dockerfile.
+RUN printf '%s\n' 'opcache.enable_cli=0' 'opcache.jit=off' 'opcache.jit_buffer_size=0' \
+    > /usr/local/etc/php/conf.d/zz-custom.ini
 
 EXPOSE 8000
 

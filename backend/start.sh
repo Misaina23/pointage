@@ -33,6 +33,12 @@ run_artisan "artisan --version" --version || echo "!!! could not read Laravel ve
 echo "Running database migrations..."
 run_artisan "migrate" migrate --force || echo "!!! migrations failed, continuing to serve"
 
+# Idempotent: only this class runs, so DirectionSeeder/HorlogeSeeder are not
+# re-executed and cannot duplicate reference data on every deploy.
+echo "Seeding super admin..."
+run_artisan "db:seed SuperAdminSeeder" db:seed --class=SuperAdminSeeder --force \
+    || echo "!!! super admin seed failed, continuing to serve"
+
 echo "Caching configuration..."
 run_artisan "config:cache" config:cache || echo "!!! config:cache failed, continuing"
 

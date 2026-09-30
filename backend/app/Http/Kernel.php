@@ -27,7 +27,10 @@ class Kernel extends HttpKernel
         ],
 
         'api' => [
-            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            // No EnsureFrontendRequestsAreStateful here: this API is stateless
+            // and authenticates with Bearer tokens, not with Sanctum's cookie
+            // based SPA session. Leaving it in makes any browser request whose
+            // Origin matches SANCTUM_STATEFUL_DOMAINS fail with 419 CSRF.
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],

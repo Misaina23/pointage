@@ -9,7 +9,7 @@ services:
     healthCheckPath: /api/health
     envVars:
       - key: APP_KEY
-        valueFromSecret: APP_KEY
+        generateValue: true
       - key: APP_ENV
         value: production
       - key: APP_DEBUG

@@ -29,6 +29,10 @@ RUN printf '%s\n' 'opcache.enable_cli=0' 'opcache.jit=off' 'opcache.jit_buffer_s
     && printf '%s\n' 'memory_limit=256M' 'max_execution_time=120' \
     > /usr/local/etc/php/conf.d/zz-limits.ini
 
+# Bind PHP-FPM to loopback only. Render scans 0.0.0.0 and would otherwise
+# advertise port 9000 (FastCGI) as a candidate web port.
+RUN sed -i 's/^listen = 9000$/listen = 127.0.0.1:9000/' /usr/local/etc/php-fpm.d/www.conf
+
 # nginx.conf arrives with `COPY . ./` above, so it is available at /var/www/nginx.conf.
 RUN cp /var/www/nginx.conf /etc/nginx/sites-available/default \
     && ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default \

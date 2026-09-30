@@ -10,7 +10,12 @@ return [
         Sanctum::currentApplicationUrlWithPort()
     ))),
 
-    'guard' => ['web', 'sanctum', 'personnel', 'security'],
+    // Only session guards belong here. Including 'sanctum' makes
+    // Sanctum\Guard::__invoke() call Auth::guard('sanctum')->user(),
+    // which is itself, causing infinite recursion on every API request.
+    // The 'personnel' and 'security' guards are token guards used through
+    // the auth:personnel / auth:security middleware, not here.
+    'guard' => ['web'],
 
     'expiration' => null,
 

@@ -3,7 +3,11 @@
 return [
 
     'defaults' => [
-        'guard' => 'sanctum',
+        // The default guard must be a session guard: Auth::attempt() is used
+        // by the login endpoint, and Sanctum's token guard does not implement
+        // attempt(). Routes needing token auth name their guard explicitly
+        // (auth:sanctum, auth:personnel, auth:security).
+        'guard' => 'web',
         'passwords' => 'users',
     ],
 

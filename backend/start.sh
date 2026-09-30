@@ -43,10 +43,29 @@ echo "Caching views..."
 run_artisan "view:cache" view:cache || echo "!!! view:cache failed, continuing"
 
 PORT="${PORT:-10000}"
-sed -i -E "s#listen (\[:::\])?[0-9]+;#listen \1${PORT};#g" /etc/nginx/sites-available/default
+NGINX_CONF="/etc/nginx/sites-available/default"
+
+if ! command -v nginx >/dev/null 2>&1; then
+    echo "!!! nginx is not installed in this image - check the Dockerfile used by Render"
+    exit 1
+fi
+
+if [ ! -f "${NGINX_CONF}" ]; then
+    echo "!!! ${NGINX_CONF} is missing, falling back to /var/www/nginx.conf"
+    if [ -f /var/www/nginx.conf ]; then
+        cp /var/www/nginx.conf "${NGINX_CONF}"
+        ln -sf "${NGINX_CONF}" /etc/nginx/sites-enabled/default
+        rm -f /etc/nginx/conf.d/default.conf
+    else
+        echo "!!! no nginx.conf found anywhere, cannot configure nginx"
+        exit 1
+    fi
+fi
+
+sed -i -E "s#listen (\[:::\])?[0-9]+;#listen \1${PORT};#g" "${NGINX_CONF}"
 
 echo "Active nginx server block:"
-grep -n "listen" /etc/nginx/sites-available/default
+grep -n "listen" "${NGINX_CONF}"
 
 nginx -t
 
@@ -57,8 +76,8 @@ echo "Starting Nginx on port ${PORT}..."
 nginx -g "daemon off;" &
 NGINX_PID=$!
 
-# Supervise: if either process dies, bring the container down so Render's health
-# check restarts it cleanly instead of serving 502s from a half-dead process.
+# Supervise: if nginx dies, bring the container down so Render's health check
+# restarts it cleanly instead of serving 502s from a half-dead process.
 while true; do
     if ! kill -0 "${NGINX_PID}" 2>/dev/null; then
         echo "!!! Nginx exited, shutting down"

@@ -62,7 +62,7 @@ if [ ! -f "${NGINX_CONF}" ]; then
     fi
 fi
 
-sed -i -E "s#listen (\[:::\])?[0-9]+;#listen \1${PORT};#g" "${NGINX_CONF}"
+sed -i -E "s#^[[:space:]]*listen[[:space:]]+[0-9]+;#listen ${PORT};#" "${NGINX_CONF}"
 
 echo "Active nginx server block:"
 grep -n "listen" "${NGINX_CONF}"

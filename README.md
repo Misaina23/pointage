@@ -33,6 +33,25 @@ de passe uniques avant toute mise en production.
 php .\backend\artisan migrate --seed
 ```
 
+### Conteneur Docker du backend
+
+Le Dockerfile concerne uniquement l'API Laravel. PostgreSQL reste un service externe ; renseignez
+son adresse dans `backend/.env` (`DB_HOST=host.docker.internal` si PostgreSQL tourne sur la machine hôte).
+Créez `backend/.env` à partir de `backend/.env.example` si nécessaire, puis générez sa clé avec
+`php .\backend\artisan key:generate` avant de lancer le conteneur.
+Pour un déploiement public, réglez également `APP_ENV=production` et `APP_DEBUG=false`.
+
+Depuis PowerShell, à la racine du dépôt :
+
+```powershell
+docker build -t pointa-backend .\backend
+docker run --rm --env-file .\backend\.env -p 8000:80 pointa-backend
+```
+
+Le conteneur exécute les migrations au démarrage. Pour les lancer séparément avant un déploiement
+à plusieurs instances, exécutez-les une seule fois puis démarrez les instances avec `RUN_MIGRATIONS=false`.
+Ne montez pas `backend/.env` dans l'image et ne publiez jamais ses secrets.
+
 Les tests ne touchent jamais `pointa` : `phpunit.xml` pointe sur la base dédiée `pointa_test`, à créer une fois :
 
 ```sql

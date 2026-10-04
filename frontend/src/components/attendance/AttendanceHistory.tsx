@@ -19,7 +19,12 @@ type AttendanceHistoryProps = {
     canRecompute?: boolean;
 };
 
-const columns: Column<AttendanceOverviewRow>[] = [
+type PunctualityRow = AttendanceOverviewRow & {
+    category: "attendance";
+    status: "on_time" | "late";
+};
+
+const columns: Column<PunctualityRow>[] = [
     {
         key: "employee",
         header: "Employé",
@@ -43,7 +48,7 @@ const columns: Column<AttendanceOverviewRow>[] = [
     {
         key: "entry_scanned_by",
         header: "Compte sécurité (entrée)",
-        render: (row) => row.entry_scanned_by ?? "Compte non enregistré",
+        render: (row) => row.entry_scanned_by ?? "—",
     },
     {
         key: "actual_exit",
@@ -53,7 +58,7 @@ const columns: Column<AttendanceOverviewRow>[] = [
     {
         key: "exit_scanned_by",
         header: "Compte sécurité (sortie)",
-        render: (row) => row.exit_scanned_by ?? "Compte non enregistré",
+        render: (row) => row.exit_scanned_by ?? "—",
     },
     {
         key: "status",
@@ -62,20 +67,16 @@ const columns: Column<AttendanceOverviewRow>[] = [
     },
 ];
 
-function statusTone(status: AttendanceOverviewRow["status"]): BadgeTone {
+function statusTone(status: PunctualityRow["status"]): BadgeTone {
     if (status === "on_time") {
         return "positive";
     }
 
-    if (status === "late" || status === "absence") {
-        return "pending";
-    }
-
-    if (status === "absent") {
+    if (status === "late") {
         return "negative";
     }
 
-    return "neutral";
+    return "negative";
 }
 
 export function AttendanceHistoryPage(props: AttendanceHistoryProps) {
@@ -107,7 +108,9 @@ function AttendanceHistoryContent({
     );
     const { notify } = useNotifications();
     const [recomputing, setRecomputing] = useState(false);
-    const rows = overview.data?.data ?? [];
+    const rows = (overview.data?.data ?? []).filter(
+        (row): row is PunctualityRow => row.category === "attendance",
+    );
 
     const handleExport = (format: "csv" | "json" | "xlsx") => {
         if (overview.loading || overview.error || !overview.data) {
@@ -139,9 +142,9 @@ function AttendanceHistoryContent({
                         row.employee.full_name,
                         row.employee.employee_number,
                         row.actual_entry ?? "",
-                        row.entry_scanned_by ?? "Compte non enregistré",
+                        row.entry_scanned_by ?? "",
                         row.actual_exit ?? "",
-                        row.exit_scanned_by ?? "Compte non enregistré",
+                        row.exit_scanned_by ?? "",
                         row.status_label,
                         row.description,
                     ]),

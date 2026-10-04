@@ -74,6 +74,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/attendance', [AttendanceController::class, 'index'])->name('attendance.index');
         Route::get('/attendance/today', [AttendanceController::class, 'today'])->name('attendance.today');
         Route::get('/attendance/overview', [AttendanceController::class, 'overview'])->name('attendance.overview');
+        Route::get('/attendance/availability', [AttendanceController::class, 'availability'])->name('attendance.availability');
         Route::get('/attendance/events', [AttendanceController::class, 'events'])->name('attendance.events');
         Route::post('/attendance/recompute', [AttendanceController::class, 'recompute'])->name('attendance.recompute');
         Route::get('/attendance/anomalies', [AttendanceController::class, 'anomalies'])->name('attendance.anomalies');

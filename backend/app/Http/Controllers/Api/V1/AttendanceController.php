@@ -17,6 +17,7 @@ use App\Services\AttendanceService;
 use App\Services\EmployeeAccessService;
 use App\Services\ScheduleService;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonPeriod;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -258,7 +259,18 @@ class AttendanceController extends Controller
                 $description = $statusLabel;
                 $category = 'attendance';
             } else {
-                $category = 'absent';
+                $now = CarbonImmutable::now($timezone);
+                $deadline = $date->setTimeFromTimeString($plannedEntry)
+                    ->addMinutes($schedule?->late_tolerance_minutes ?? 0);
+
+                if ($date->isSameDay($now) && $now->lessThanOrEqualTo($deadline)) {
+                    $status = 'not_started';
+                    $statusLabel = 'Service non commencé';
+                    $description = 'L’heure prévue du service n’est pas encore dépassée.';
+                    $category = 'other';
+                } else {
+                    $category = 'absent';
+                }
             }
 
             return [
@@ -294,6 +306,224 @@ class AttendanceController extends Controller
             ],
             'data' => $rows,
         ]);
+    }
+
+    /**
+     * Congés, permissions, absences déclarées et absences détectées sur une période.
+     */
+    public function availability(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Attendance::class);
+
+        $validated = $request->validate([
+            'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+        ]);
+        $from = CarbonImmutable::parse($validated['from'])->startOfDay();
+        $to = CarbonImmutable::parse($validated['to'])->startOfDay();
+        $this->authorizeHistoryDate($from);
+        $this->authorizeHistoryDate($to);
+        $fromString = $from->toDateString();
+        $toString = $to->toDateString();
+        $timezone = config('app.timezone');
+        $now = CarbonImmutable::now($timezone);
+
+        $employees = $this->employees->limitToVisibleEmployees(
+            Employee::query()->where('status', 'active'),
+            $request->user(),
+            includeSecurityTeam: true,
+        )
+            ->with([
+                'workSchedules' => fn ($query) => $query
+                    ->whereDate('starts_on', '<=', $toString)
+                    ->where(fn ($assignment) => $assignment
+                        ->whereNull('ends_on')
+                        ->orWhereDate('ends_on', '>=', $fromString))
+                    ->orderByDesc('starts_on'),
+                'workSchedules.workSchedule.days',
+                'attendanceEvents' => fn ($query) => $query
+                    ->with('scannedBy')
+                    ->whereBetween('occurred_at', [$from, $to->endOfDay()])
+                    ->orderBy('occurred_at')
+                    ->orderBy('id'),
+            ])
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get();
+
+        $employeeIds = $employees->modelKeys();
+        $leaveRequests = LeaveRequest::query()
+            ->with(['employee', 'leaveType'])
+            ->whereIn('employee_id', $employeeIds)
+            ->where('status', 'approved')
+            ->whereDate('starts_on', '<=', $toString)
+            ->whereDate('ends_on', '>=', $fromString)
+            ->get();
+        $permissionRequests = PermissionRequest::query()
+            ->with(['employee', 'permissionType'])
+            ->whereIn('employee_id', $employeeIds)
+            ->where('status', 'approved')
+            ->whereBetween('permission_date', [$fromString, $toString])
+            ->get();
+        $absenceRecords = AbsenceRecord::query()
+            ->with(['employee', 'absenceType'])
+            ->whereIn('employee_id', $employeeIds)
+            ->whereIn('status', ['approved', 'pending'])
+            ->whereDate('starts_on', '<=', $toString)
+            ->where(fn ($query) => $query
+                ->whereNull('ends_on')
+                ->orWhereDate('ends_on', '>=', $fromString))
+            ->get();
+        $scheduleService = app(ScheduleService::class);
+
+        $rows = collect();
+        foreach ($leaveRequests as $leave) {
+            $rows->push([
+                'id' => 'leave-'.$leave->id,
+                'employee' => $this->availabilityEmployee($leave->employee),
+                'category' => 'leave',
+                'status_label' => 'Congé approuvé',
+                'starts_on' => $leave->starts_on?->toDateString(),
+                'ends_on' => $leave->ends_on?->toDateString(),
+                'hours' => null,
+                'description' => $leave->leaveType?->name ?? 'Congé approuvé',
+            ]);
+        }
+
+        foreach ($permissionRequests as $permission) {
+            $rows->push([
+                'id' => 'permission-'.$permission->id,
+                'employee' => $this->availabilityEmployee($permission->employee),
+                'category' => 'permission',
+                'status_label' => 'Permission accordée',
+                'starts_on' => $permission->permission_date?->toDateString(),
+                'ends_on' => $permission->permission_date?->toDateString(),
+                'hours' => substr($permission->starts_at, 0, 5).' – '.substr($permission->ends_at, 0, 5),
+                'description' => $permission->permissionType?->name ?? 'Permission accordée',
+            ]);
+        }
+
+        foreach ($absenceRecords as $absence) {
+            $rows->push([
+                'id' => 'absence-'.$absence->id,
+                'employee' => $this->availabilityEmployee($absence->employee),
+                'category' => 'absence',
+                'status_label' => $absence->status === 'approved' ? 'Absence approuvée' : 'Absence en attente',
+                'starts_on' => $absence->starts_on?->toDateString(),
+                'ends_on' => $absence->ends_on?->toDateString(),
+                'hours' => null,
+                'description' => $absence->reason ?: ($absence->absenceType?->name ?? 'Absence déclarée'),
+            ]);
+        }
+
+        $leaveByEmployee = $leaveRequests->groupBy('employee_id');
+        $permissionsByEmployeeDate = $permissionRequests->groupBy(
+            fn (PermissionRequest $permission): string => $permission->employee_id.'|'.$permission->permission_date?->toDateString(),
+        );
+        $absencesByEmployee = $absenceRecords->groupBy('employee_id');
+
+        foreach (CarbonPeriod::create($from, $to) as $periodDate) {
+            $date = CarbonImmutable::instance($periodDate)->startOfDay();
+
+            if ($date->greaterThan($now->startOfDay()) || $scheduleService->isHoliday($date)) {
+                continue;
+            }
+
+            foreach ($employees as $employee) {
+                if (
+                    $leaveByEmployee->has($employee->id)
+                    && $leaveByEmployee->get($employee->id)->contains(
+                        fn (LeaveRequest $leave): bool => $leave->starts_on->lessThanOrEqualTo($date)
+                            && $leave->ends_on->greaterThanOrEqualTo($date),
+                    )
+                ) {
+                    continue;
+                }
+
+                if ($permissionsByEmployeeDate->has($employee->id.'|'.$date->toDateString())) {
+                    continue;
+                }
+
+                if (
+                    $absencesByEmployee->has($employee->id)
+                    && $absencesByEmployee->get($employee->id)->contains(
+                        fn (AbsenceRecord $absence): bool => $absence->starts_on->lessThanOrEqualTo($date)
+                            && ($absence->ends_on === null || $absence->ends_on->greaterThanOrEqualTo($date)),
+                    )
+                ) {
+                    continue;
+                }
+
+                $hasEntry = $employee->attendanceEvents->contains(
+                    fn (AttendanceEvent $event): bool => $event->event_type === 'entry'
+                        && $event->occurred_at?->setTimezone($timezone)->toDateString() === $date->toDateString(),
+                );
+
+                if ($hasEntry) {
+                    continue;
+                }
+
+                $assignment = $employee->workSchedules->first(
+                    fn ($item): bool => $item->starts_on->lessThanOrEqualTo($date)
+                        && ($item->ends_on === null || $item->ends_on->greaterThanOrEqualTo($date)),
+                );
+                $schedule = $assignment?->workSchedule;
+                $day = $schedule?->is_active
+                    ? $schedule->days->firstWhere('day_of_week', $date->isoWeekday())
+                    : null;
+
+                if ($day?->starts_at === null) {
+                    continue;
+                }
+
+                $expectedEntry = $date->setTimeFromTimeString($day->starts_at);
+                $deadline = $expectedEntry->addMinutes($schedule->late_tolerance_minutes ?? 0);
+
+                if ($date->isSameDay($now) && $now->lessThanOrEqualTo($deadline)) {
+                    continue;
+                }
+
+                $rows->push([
+                    'id' => 'absent-'.$employee->id.'-'.$date->toDateString(),
+                    'employee' => $this->availabilityEmployee($employee),
+                    'category' => 'absent',
+                    'status_label' => 'Absent',
+                    'starts_on' => $date->toDateString(),
+                    'ends_on' => $date->toDateString(),
+                    'hours' => null,
+                    'description' => 'Aucun pointage d’entrée après l’heure prévue du service.',
+                ]);
+            }
+        }
+
+        $rows = $rows->sortBy([
+            ['starts_on', 'asc'],
+            ['employee.full_name', 'asc'],
+        ])->values();
+
+        return response()->json([
+            'from' => $fromString,
+            'to' => $toString,
+            'summary' => [
+                'leave' => $rows->where('category', 'leave')->count(),
+                'permission' => $rows->where('category', 'permission')->count(),
+                'absence' => $rows->where('category', 'absence')->count(),
+                'absent' => $rows->where('category', 'absent')->count(),
+            ],
+            'data' => $rows,
+        ]);
+    }
+
+    /**
+     * @return array{id: int, employee_number: string, full_name: string}
+     */
+    private function availabilityEmployee(Employee $employee): array
+    {
+        return [
+            'id' => $employee->id,
+            'employee_number' => $employee->employee_number,
+            'full_name' => $employee->fullName(),
+        ];
     }
 
     /**

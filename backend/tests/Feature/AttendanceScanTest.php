@@ -172,6 +172,101 @@ class AttendanceScanTest extends TestCase
         $this->assertSame('Aucun pointage, congé ou permission enregistré.', $rows[$notPunched->id]['description']);
     }
 
+    public function test_availability_range_detects_absence_after_shift_start_and_removes_it_after_entry_scan(): void
+    {
+        $date = '2026-10-05';
+        $this->travelTo(CarbonImmutable::parse("{$date} 09:00:00", config('app.timezone')));
+
+        $schedule = $this->makeStandardSchedule();
+        $absent = $this->makeEmployee();
+        $punched = $this->makeEmployee();
+        $onLeave = $this->makeEmployee();
+        $onPermission = $this->makeEmployee();
+        $declaredAbsent = $this->makeEmployee();
+
+        foreach ([$absent, $punched, $onLeave, $onPermission, $declaredAbsent] as $employee) {
+            $employee->workSchedules()->create([
+                'work_schedule_id' => $schedule->id,
+                'starts_on' => $date,
+            ]);
+        }
+
+        $this->createEvent($punched, 'entry', '08:05:00', $date);
+        $leaveType = LeaveType::query()->create([
+            'name' => 'Congé annuel',
+            'code' => 'ANNUEL-'.Str::upper(Str::random(6)),
+        ]);
+        $onLeave->leaveRequests()->create([
+            'leave_type_id' => $leaveType->id,
+            'starts_on' => $date,
+            'ends_on' => '2026-10-06',
+            'requested_days' => 2,
+            'reason' => 'Congé approuvé',
+            'status' => 'approved',
+        ]);
+        $permissionType = PermissionType::query()->create([
+            'name' => 'Permission personnelle',
+            'code' => 'PERM-'.Str::upper(Str::random(6)),
+        ]);
+        $onPermission->permissionRequests()->create([
+            'permission_type_id' => $permissionType->id,
+            'permission_date' => $date,
+            'starts_at' => '10:00:00',
+            'ends_at' => '11:00:00',
+            'reason' => 'Rendez-vous',
+            'status' => 'approved',
+        ]);
+        $absenceType = AbsenceType::query()->create([
+            'name' => 'Absence déclarée',
+            'code' => 'ABS-'.Str::upper(Str::random(6)),
+        ]);
+        $declaredAbsent->absenceRecords()->create([
+            'absence_type_id' => $absenceType->id,
+            'starts_on' => $date,
+            'ends_on' => $date,
+            'reason' => 'Maladie',
+            'status' => 'approved',
+        ]);
+
+        $response = $this->withToken($this->createTokenForRole('administrateur'))
+            ->getJson('/api/v1/attendance/availability?from=2026-10-05&to=2026-10-06')
+            ->assertOk()
+            ->assertJsonPath('summary.leave', 1)
+            ->assertJsonPath('summary.permission', 1)
+            ->assertJsonPath('summary.absence', 1)
+            ->assertJsonPath('summary.absent', 1);
+
+        $rows = collect($response->json('data'));
+        $this->assertTrue($rows->contains(
+            fn (array $row): bool => $row['category'] === 'absent'
+                && $row['employee']['id'] === $absent->id
+                && $row['starts_on'] === $date,
+        ));
+        $this->assertFalse($rows->contains(
+            fn (array $row): bool => $row['category'] === 'absent'
+                && $row['employee']['id'] === $punched->id,
+        ));
+        $this->assertFalse($rows->contains(
+            fn (array $row): bool => $row['category'] === 'absent'
+                && $row['starts_on'] === '2026-10-06',
+        ));
+        $this->assertTrue($rows->contains(
+            fn (array $row): bool => $row['category'] === 'leave'
+                && $row['employee']['id'] === $onLeave->id
+                && $row['ends_on'] === '2026-10-06',
+        ));
+        $this->assertTrue($rows->contains(
+            fn (array $row): bool => $row['category'] === 'permission'
+                && $row['employee']['id'] === $onPermission->id
+                && $row['hours'] === '10:00 – 11:00',
+        ));
+        $this->assertTrue($rows->contains(
+            fn (array $row): bool => $row['category'] === 'absence'
+                && $row['employee']['id'] === $declaredAbsent->id
+                && $row['description'] === 'Maladie',
+        ));
+    }
+
     public function test_security_user_can_record_an_entry_with_a_badge(): void
     {
         [$employee, $badge] = $this->createBadge();

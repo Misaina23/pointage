@@ -95,7 +95,7 @@ export type AttendanceOverviewRow = {
     entry_scanned_by: string | null;
     actual_exit: string | null;
     exit_scanned_by: string | null;
-    status: "on_time" | "late" | "absent" | "leave" | "permission" | "absence" | "holiday" | "rest_day";
+    status: "on_time" | "late" | "absent" | "leave" | "permission" | "absence" | "holiday" | "rest_day" | "not_started";
     status_label: string;
     category: "attendance" | "leave" | "permission" | "absence" | "absent" | "other";
     description: string;
@@ -116,6 +116,33 @@ export type AttendanceOverview = {
         absence: number;
     };
     data: AttendanceOverviewRow[];
+};
+
+export type AttendanceAvailabilityRow = {
+    id: string;
+    employee: {
+        id: number;
+        employee_number: string;
+        full_name: string;
+    };
+    category: "leave" | "permission" | "absence" | "absent";
+    status_label: string;
+    starts_on: string | null;
+    ends_on: string | null;
+    hours: string | null;
+    description: string;
+};
+
+export type AttendanceAvailability = {
+    from: string;
+    to: string;
+    summary: {
+        leave: number;
+        permission: number;
+        absence: number;
+        absent: number;
+    };
+    data: AttendanceAvailabilityRow[];
 };
 
 export type PaginatedAttendance<T> = {

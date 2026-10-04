@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge, Card, DataTable } from "@/components/ui";
 import type { Column } from "@/components/ui";
 import { StatCard, StatGrid } from "@/components/dashboard";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { todayIso } from "@/lib/dates";
-import { getAttendanceOverview } from "@/services/api/attendance";
-import type { AttendanceOverview, AttendanceOverviewRow } from "@/types/attendance";
+import { getAttendanceAvailability } from "@/services/api/attendance";
+import type { AttendanceAvailability, AttendanceAvailabilityRow } from "@/types/attendance";
 
 type AvailabilityFilter = "all" | "leave" | "permission" | "absence" | "absent";
 
@@ -16,10 +16,10 @@ const categoryLabels: Record<AvailabilityFilter, string> = {
     leave: "Congés",
     permission: "Permissions",
     absence: "Absences déclarées",
-    absent: "Absences sans justificatif",
+    absent: "Absents détectés",
 };
 
-const columns: Column<AttendanceOverviewRow>[] = [
+const columns: Column<AttendanceAvailabilityRow>[] = [
     {
         key: "employee",
         header: "Employé",
@@ -53,14 +53,7 @@ const columns: Column<AttendanceOverviewRow>[] = [
                 : row.starts_on;
         },
     },
-    {
-        key: "hours",
-        header: "Heures",
-        render: (row) =>
-            row.permission_starts_at && row.permission_ends_at
-                ? `${row.permission_starts_at.slice(0, 5)} – ${row.permission_ends_at.slice(0, 5)}`
-                : "—",
-    },
+    { key: "hours", header: "Heures", render: (row) => row.hours ?? "—" },
     {
         key: "description",
         header: "Description",
@@ -69,19 +62,20 @@ const columns: Column<AttendanceOverviewRow>[] = [
 ];
 
 export function AttendanceAvailabilityPage() {
-    const [date, setDate] = useState(todayIso());
+    const [from, setFrom] = useState(todayIso());
+    const [to, setTo] = useState(todayIso());
     const [filter, setFilter] = useState<AvailabilityFilter>("all");
     const [search, setSearch] = useState("");
-    const overview = useAsyncData<AttendanceOverview>(
-        (signal) => getAttendanceOverview(date, signal),
-        [date],
+    const availability = useAsyncData<AttendanceAvailability>(
+        (signal) => getAttendanceAvailability(from, to, signal),
+        [from, to],
     );
-    const availabilityRows = (overview.data?.data ?? []).filter((row) =>
-        row.category === "leave"
-        || row.category === "permission"
-        || row.category === "absence"
-        || row.category === "absent");
-    const rows = availabilityRows.filter((row) => {
+    useEffect(() => {
+        const refreshInterval = window.setInterval(availability.reload, 60_000);
+
+        return () => window.clearInterval(refreshInterval);
+    }, [availability.reload]);
+    const rows = (availability.data?.data ?? []).filter((row) => {
         const matchesFilter = filter === "all" || row.category === filter;
         const normalizedSearch = search.trim().toLocaleLowerCase("fr");
         const matchesSearch = normalizedSearch === ""
@@ -90,7 +84,7 @@ export function AttendanceAvailabilityPage() {
 
         return matchesFilter && matchesSearch;
     });
-    const summary = overview.data?.summary;
+    const summary = availability.data?.summary;
 
     return (
         <>
@@ -104,19 +98,36 @@ export function AttendanceAvailabilityPage() {
                 </div>
                 <div className="heading-tools">
                     <label className="field-label">
-                        Date
+                        Date début
                         <input
                             type="date"
                             className="form-control"
-                            value={date}
-                            onChange={(event) => setDate(event.target.value)}
+                            value={from}
+                            onChange={(event) => {
+                                const nextFrom = event.target.value;
+                                setFrom(nextFrom);
+
+                                if (nextFrom > to) {
+                                    setTo(nextFrom);
+                                }
+                            }}
+                        />
+                    </label>
+                    <label className="field-label">
+                        Date fin
+                        <input
+                            type="date"
+                            className="form-control"
+                            value={to}
+                            min={from}
+                            onChange={(event) => setTo(event.target.value)}
                         />
                     </label>
                     <button
                         type="button"
                         className="button-secondary"
-                        onClick={overview.reload}
-                        disabled={overview.loading}
+                        onClick={availability.reload}
+                        disabled={availability.loading}
                     >
                         Actualiser
                     </button>
@@ -130,7 +141,7 @@ export function AttendanceAvailabilityPage() {
                 <StatCard label="Sans pointage / justificatif" value={summary?.absent ?? 0} tone="red" />
             </StatGrid>
 
-            <Card title={`Suivi du ${date}`}>
+            <Card title={`Suivi du ${from} au ${to}`}>
                 <div className="filter-row">
                     <label className="field-label">
                         Situation
@@ -156,17 +167,17 @@ export function AttendanceAvailabilityPage() {
                     </label>
                 </div>
 
-                {overview.error ? (
+                {availability.error ? (
                     <p className="form-error" role="alert">
-                        Impossible de charger le suivi : {overview.error}
+                        Impossible de charger le suivi : {availability.error}
                     </p>
-                ) : overview.loading ? (
+                ) : availability.loading ? (
                     <p className="empty-history">Chargement…</p>
                 ) : (
                     <DataTable
                         columns={columns}
                         rows={rows}
-                        rowKey={(row) => row.employee.id}
+                        rowKey={(row) => row.id}
                         emptyLabel="Aucun congé, permission ou absence pour cette date."
                         pageSize={10}
                     />

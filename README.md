@@ -60,6 +60,30 @@ vaut `public`, et attend PostgreSQL avant de les lancer. Les nouvelles migration
 `pointa_v2` ; les anciennes tables restent intactes dans `public`. Le transfert des anciennes données
 vers le nouveau modèle nécessite une migration dédiée.
 
+### Variables de production Vercel et Render
+
+Dans Vercel, configurez ces variables pour le projet frontend et redéployez :
+
+```env
+NEXT_PUBLIC_API_URL=https://pointage-mfsj.onrender.com/api/v1
+```
+
+Dans Render, configurez les variables du service backend :
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://pointage-mfsj.onrender.com
+CORS_ALLOWED_ORIGINS=https://pointagemisaina.vercel.app
+DB_SCHEMA=pointa_v2
+DB_SSLMODE=require
+```
+
+Conservez également `APP_KEY` et les paramètres `DB_*` existants dans les variables Render ;
+n'inscrivez aucun secret dans Vercel, Git ou ce fichier. L'API utilise des jetons Bearer, donc le
+domaine Vercel n'a pas besoin d'être ajouté à `SANCTUM_STATEFUL_DOMAINS`. CORS autorise uniquement
+l'origine frontend déclarée et conserve les credentials pour les appels API du navigateur.
+
 Les tests ne touchent jamais `pointa` : `phpunit.xml` pointe sur la base dédiée `pointa_test`, à créer une fois :
 
 ```sql

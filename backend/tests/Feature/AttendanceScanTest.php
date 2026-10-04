@@ -90,6 +90,119 @@ class AttendanceScanTest extends TestCase
         $this->assertSame('00:30:00', $attendance->first_entry);
     }
 
+    public function test_admin_overview_shows_a_scan_even_without_a_scheduled_shift(): void
+    {
+        [$employee, $badge] = $this->createBadge();
+        $securityToken = $this->createTokenForRole('securite');
+
+        $this->withToken($securityToken)->postJson('/api/v1/attendance/scan', [
+            'badge_public_id' => $badge->public_id,
+            'event_type' => 'entry',
+            'client_event_id' => Str::uuid()->toString(),
+            'occurred_at' => '2026-10-04T05:00:00Z',
+        ])->assertCreated();
+
+        Auth::forgetGuards();
+        $this->withToken($this->createTokenForRole('administrateur'))
+            ->getJson('/api/v1/attendance/overview?date=2026-10-04')
+            ->assertOk()
+            ->assertJsonPath('summary.on_time', 1)
+            ->assertJsonPath('data.0.employee.id', $employee->id)
+            ->assertJsonPath('data.0.actual_entry', '08:00')
+            ->assertJsonPath('data.0.entry_scanned_by', User::query()
+                ->whereHas('roles', fn ($query) => $query->where('slug', 'securite'))
+                ->firstOrFail()->name)
+            ->assertJsonPath('data.0.status', 'on_time')
+            ->assertJsonPath('data.0.description', 'À l’heure');
+    }
+
+    public function test_default_eight_am_start_and_ten_minute_tolerance_apply_on_weekends(): void
+    {
+        [$onTimeEmployee, $onTimeBadge] = $this->createBadge();
+        [$lateEmployee, $lateBadge] = $this->createBadge();
+        $securityToken = $this->createTokenForRole('securite');
+
+        $this->withToken($securityToken)->postJson('/api/v1/attendance/scan', [
+            'badge_public_id' => $onTimeBadge->public_id,
+            'event_type' => 'entry',
+            'client_event_id' => Str::uuid()->toString(),
+            'occurred_at' => '2026-10-04T05:10:00Z',
+        ])->assertCreated();
+        $this->withToken($securityToken)->postJson('/api/v1/attendance/scan', [
+            'badge_public_id' => $lateBadge->public_id,
+            'event_type' => 'entry',
+            'client_event_id' => Str::uuid()->toString(),
+            'occurred_at' => '2026-10-04T05:11:00Z',
+        ])->assertCreated();
+
+        $onTimeAttendance = Attendance::query()
+            ->where('employee_id', $onTimeEmployee->id)
+            ->whereDate('attendance_date', '2026-10-04')
+            ->firstOrFail();
+        $this->assertSame('present', $onTimeAttendance->status);
+        $this->assertSame(0, $onTimeAttendance->late_minutes);
+
+        $lateAttendance = Attendance::query()
+            ->where('employee_id', $lateEmployee->id)
+            ->whereDate('attendance_date', '2026-10-04')
+            ->firstOrFail();
+        $this->assertSame('late', $lateAttendance->status);
+        $this->assertSame(11, $lateAttendance->late_minutes);
+
+        Auth::forgetGuards();
+        $this->withToken($this->createTokenForRole('administrateur'))
+            ->getJson('/api/v1/attendance/overview?date=2026-10-04')
+            ->assertOk()
+            ->assertJsonFragment([
+                'employee' => [
+                    'id' => $onTimeEmployee->id,
+                    'employee_number' => $onTimeEmployee->employee_number,
+                    'full_name' => $onTimeEmployee->fullName(),
+                ],
+                'actual_entry' => '08:10',
+                'entry_scanned_by' => User::query()
+                    ->whereHas('roles', fn ($query) => $query->where('slug', 'securite'))
+                    ->firstOrFail()->name,
+                'actual_exit' => null,
+                'exit_scanned_by' => null,
+                'status' => 'on_time',
+                'status_label' => 'À l’heure',
+                'category' => 'attendance',
+                'description' => 'À l’heure',
+                'starts_on' => null,
+                'ends_on' => null,
+                'permission_starts_at' => null,
+                'permission_ends_at' => null,
+            ])
+            ->assertJsonFragment([
+                'employee' => [
+                    'id' => $lateEmployee->id,
+                    'employee_number' => $lateEmployee->employee_number,
+                    'full_name' => $lateEmployee->fullName(),
+                ],
+                'actual_entry' => '08:11',
+                'status' => 'late',
+                'status_label' => 'En retard',
+                'category' => 'attendance',
+            ]);
+    }
+
+    public function test_no_scan_after_default_start_and_tolerance_is_absent_on_weekends(): void
+    {
+        $employee = $this->makeEmployee();
+        $this->travelTo(CarbonImmutable::parse('2026-10-04 08:11:00', config('app.timezone')));
+
+        $this->withToken($this->createTokenForRole('administrateur'))
+            ->getJson('/api/v1/attendance/overview?date=2026-10-04')
+            ->assertOk()
+            ->assertJsonPath('summary.absent', 1)
+            ->assertJsonPath('data.0.employee.id', $employee->id)
+            ->assertJsonPath('data.0.status', 'absent')
+            ->assertJsonPath('data.0.category', 'absent');
+
+        $this->travelBack();
+    }
+
     public function test_attendance_overview_combines_scans_and_leave_permission_and_absence_statuses(): void
     {
         $date = '2026-10-05';

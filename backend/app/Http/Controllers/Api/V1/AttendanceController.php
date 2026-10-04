@@ -211,8 +211,7 @@ class AttendanceController extends Controller
             $day = $schedule?->is_active
                 ? $schedule->days->firstWhere('day_of_week', $date->isoWeekday())
                 : null;
-            $plannedEntry = $day?->starts_at === null ? null : substr($day->starts_at, 0, 5);
-            $plannedExit = $day?->ends_at === null ? null : substr($day->ends_at, 0, 5);
+            $plannedEntry = $day?->starts_at === null ? '08:00' : substr($day->starts_at, 0, 5);
             $entryEvent = $employee->attendanceEvents->firstWhere('event_type', 'entry');
             $exitEvent = $employee->attendanceEvents->where('event_type', 'exit')->last();
             $leave = $leaveRequests->get($employee->id)?->first();
@@ -223,7 +222,25 @@ class AttendanceController extends Controller
             $description = 'Aucun pointage, congé ou permission enregistré.';
             $category = 'absent';
 
-            if ($leave !== null) {
+            if ($entryEvent !== null) {
+                if ($plannedEntry === null) {
+                    $status = 'on_time';
+                    $statusLabel = 'À l’heure';
+                    $description = 'Pointage enregistré sans horaire planifié.';
+                } else {
+                    $expectedEntry = $date->setTimeFromTimeString($plannedEntry);
+                    $actualEntry = $entryEvent->occurred_at?->setTimezone($timezone);
+                    $tolerance = $day?->starts_at === null
+                        ? 10
+                        : ($schedule?->late_tolerance_minutes ?? 10);
+                    $isLate = $actualEntry !== null && $actualEntry->greaterThan($expectedEntry->addMinutes($tolerance));
+                    $status = $isLate ? 'late' : 'on_time';
+                    $statusLabel = $isLate ? 'En retard' : 'À l’heure';
+                    $description = $statusLabel;
+                }
+
+                $category = 'attendance';
+            } elseif ($leave !== null) {
                 $status = 'leave';
                 $statusLabel = 'En congé';
                 $description = $leave->leaveType?->name ?? 'Congé approuvé';
@@ -244,24 +261,17 @@ class AttendanceController extends Controller
                 $statusLabel = 'Jour férié';
                 $description = 'Jour férié';
                 $category = 'other';
-            } elseif ($plannedEntry === null || $plannedExit === null) {
+            } elseif ($plannedEntry === null) {
                 $status = 'rest_day';
                 $statusLabel = 'Repos / non planifié';
                 $description = 'Aucun horaire de travail prévu.';
                 $category = 'other';
-            } elseif ($entryEvent !== null) {
-                $expectedEntry = $date->setTimeFromTimeString($plannedEntry);
-                $actualEntry = $entryEvent->occurred_at?->setTimezone($timezone);
-                $tolerance = $schedule?->late_tolerance_minutes ?? 0;
-                $isLate = $actualEntry !== null && $actualEntry->greaterThan($expectedEntry->addMinutes($tolerance));
-                $status = $isLate ? 'late' : 'on_time';
-                $statusLabel = $isLate ? 'En retard' : 'À l’heure';
-                $description = $statusLabel;
-                $category = 'attendance';
             } else {
                 $now = CarbonImmutable::now($timezone);
                 $deadline = $date->setTimeFromTimeString($plannedEntry)
-                    ->addMinutes($schedule?->late_tolerance_minutes ?? 0);
+                    ->addMinutes($day?->starts_at === null
+                        ? 10
+                        : ($schedule?->late_tolerance_minutes ?? 10));
 
                 if ($date->isSameDay($now) && $now->lessThanOrEqualTo($deadline)) {
                     $status = 'not_started';

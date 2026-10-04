@@ -13,6 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 class ScheduleService
 {
+    private const DEFAULT_SHIFT_START = '08:00:00';
+
+    private const DEFAULT_LATE_TOLERANCE_MINUTES = 10;
+
     public function isHoliday(CarbonImmutable $date): bool
     {
         return Holiday::query()->whereDate('date', $date->toDateString())->exists();
@@ -61,13 +65,13 @@ class ScheduleService
         $schedule = $this->scheduleFor($employee, $date);
 
         if (! $schedule || ! $schedule->is_active) {
-            return null;
+            return $this->defaultShift($date);
         }
 
         $day = $schedule->days->firstWhere('day_of_week', $date->isoWeekday());
 
-        if (! $day) {
-            return null;
+        if (! $day || $day->starts_at === null) {
+            return $this->defaultShift($date);
         }
 
         return new ScheduledShift(
@@ -77,7 +81,20 @@ class ScheduleService
             breakStartsAt: $this->timeOn($date, $day->break_starts_at),
             breakEndsAt: $this->timeOn($date, $day->break_ends_at),
             lateToleranceMinutes: $schedule->late_tolerance_minutes,
-            isRestDay: $day->starts_at === null || $day->ends_at === null,
+            isRestDay: false,
+        );
+    }
+
+    private function defaultShift(CarbonImmutable $date): ScheduledShift
+    {
+        return new ScheduledShift(
+            date: $date,
+            startsAt: $this->timeOn($date, self::DEFAULT_SHIFT_START),
+            endsAt: null,
+            breakStartsAt: null,
+            breakEndsAt: null,
+            lateToleranceMinutes: self::DEFAULT_LATE_TOLERANCE_MINUTES,
+            isRestDay: false,
         );
     }
 

@@ -167,7 +167,7 @@ class AttendanceService
 
     private function lateMinutes(?ScheduledShift $shift, mixed $firstEntry): int
     {
-        if (! $shift || ! $shift->hasHours() || $firstEntry === null) {
+        if (! $shift || $shift->startsAt === null || $firstEntry === null) {
             return 0;
         }
 
@@ -178,7 +178,7 @@ class AttendanceService
             return 0;
         }
 
-        return (int) $expected->diffInMinutes($firstEntry, false);
+        return max(0, (int) $expected->diffInMinutes($firstEntry, false));
     }
 
     private function overtimeMinutes(?ScheduledShift $shift, mixed $lastExit): int

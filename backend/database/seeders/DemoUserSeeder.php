@@ -14,7 +14,10 @@ class DemoUserSeeder extends Seeder
 {
     public function run(): void
     {
-        if (! app()->environment(['local', 'testing'])) {
+        if (
+            ! app()->environment(['local', 'testing'])
+            && ! (app()->environment('production') && config('app.seed_demo_accounts'))
+        ) {
             return;
         }
 

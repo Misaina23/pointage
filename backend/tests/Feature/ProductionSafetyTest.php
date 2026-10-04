@@ -69,6 +69,23 @@ class ProductionSafetyTest extends TestCase
         );
     }
 
+    public function test_demo_accounts_can_be_explicitly_enabled_in_production(): void
+    {
+        $this->seed(RoleSeeder::class);
+        $this->seed(DirectionSeeder::class);
+        $this->seed(ReferenceDataSeeder::class);
+        $this->app['env'] = 'production';
+        config(['app.seed_demo_accounts' => true]);
+
+        app(DemoUserSeeder::class)->run();
+
+        $user = User::query()->where('email', 'admin@gmail.com')->firstOrFail();
+
+        $this->assertTrue(Hash::check('123456', $user->password));
+        $this->assertTrue($user->hasRole('administrateur'));
+        $this->assertNotNull($user->employee);
+    }
+
     public function test_application_refuses_to_boot_in_production_with_debug_enabled(): void
     {
         $this->app['env'] = 'production';

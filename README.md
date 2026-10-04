@@ -85,6 +85,12 @@ n'utilise pas les sessions Sanctum ni les cookies CSRF. Le client n'envoie donc 
 l'API ; CORS autorise uniquement l'origine frontend déclarée. Ne configurez pas Vercel comme domaine
 stateful Sanctum.
 
+Les six comptes de démonstration (`admin@gmail.com`, `rh@gmail.com`, `direction@gmail.com`,
+`securite@gmail.com`, `responsable@gmail.com`, `personnel@gmail.com`) utilisent le mot de passe
+`123456`. Ils peuvent être créés en production uniquement avec `SEED_DEMO_ACCOUNTS=true` et
+`php artisan db:seed --force`. N'activez pas cette option durablement : ces identifiants sont publics
+et doivent être remplacés ou désactivés avant tout usage réel.
+
 Les tests ne touchent jamais `pointa` : `phpunit.xml` pointe sur la base dédiée `pointa_test`, à créer une fois :
 
 ```sql

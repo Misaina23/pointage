@@ -25,12 +25,13 @@ class AttendanceScanController extends Controller
     {
         $data = $request->validated();
         $badgeIdentifier = $data['badge_public_id'];
+        $scannedByUserId = $request->user()->id;
         $occurredAt = CarbonImmutable::parse($data['occurred_at'])
             ->setTimezone(config('app.timezone'));
         $deviceCode = $data['device_code'] ?? null;
 
         $existingEvent = AttendanceEvent::query()
-            ->with(['badge', 'device', 'employee'])
+            ->with(['badge', 'device', 'employee', 'scannedBy'])
             ->where('client_event_id', $data['client_event_id'])
             ->first();
 
@@ -53,7 +54,7 @@ class AttendanceScanController extends Controller
             return response()->json(['message' => 'Badge inconnu, inactif ou révoqué.'], 404);
         }
 
-        $event = DB::transaction(function () use ($badge, $badgeColumn, $badgeIdentifier, $data, $deviceCode, $occurredAt): AttendanceEvent|JsonResponse {
+        $event = DB::transaction(function () use ($badge, $badgeColumn, $badgeIdentifier, $data, $deviceCode, $occurredAt, $scannedByUserId): AttendanceEvent|JsonResponse {
             $lockedBadge = Badge::query()->whereKey($badge->id)->lockForUpdate()->first();
 
             if (
@@ -76,7 +77,7 @@ class AttendanceScanController extends Controller
             }
 
             $existingEvent = AttendanceEvent::query()
-                ->with(['badge', 'device', 'employee'])
+                ->with(['badge', 'device', 'employee', 'scannedBy'])
                 ->where('client_event_id', $data['client_event_id'])
                 ->lockForUpdate()
                 ->first();
@@ -132,6 +133,7 @@ class AttendanceScanController extends Controller
                 'employee_id' => $employee->id,
                 'badge_id' => $lockedBadge->id,
                 'device_id' => $device?->id,
+                'scanned_by_user_id' => $scannedByUserId,
                 'client_event_id' => $data['client_event_id'],
                 'event_type' => $data['event_type'],
                 'occurred_at' => $occurredAt,
@@ -153,7 +155,7 @@ class AttendanceScanController extends Controller
             return $event;
         }
 
-        $event->load(['badge', 'device', 'employee']);
+        $event->load(['badge', 'device', 'employee', 'scannedBy']);
 
         return $this->eventResponse($event, false, 201);
     }

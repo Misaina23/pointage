@@ -46,6 +46,7 @@ export type AttendanceEvent = {
     employee: AttendanceEventEmployee;
     badge_number: string | null;
     device_code: string | null;
+    scanned_by: { id: number; name: string } | null;
 };
 
 export type ScanResult = {
@@ -90,10 +91,10 @@ export type AttendanceOverviewRow = {
         employee_number: string;
         full_name: string;
     };
-    planned_entry: string | null;
     actual_entry: string | null;
-    planned_exit: string | null;
+    entry_scanned_by: string | null;
     actual_exit: string | null;
+    exit_scanned_by: string | null;
     status: "on_time" | "late" | "absent" | "leave" | "permission" | "absence" | "holiday" | "rest_day";
     status_label: string;
     category: "attendance" | "leave" | "permission" | "absence" | "absent" | "other";

@@ -36,24 +36,24 @@ const columns: Column<AttendanceOverviewRow>[] = [
         ),
     },
     {
-        key: "planned_entry",
-        header: "Heure entrée",
-        render: (row) => row.planned_entry ?? "—",
-    },
-    {
         key: "actual_entry",
-        header: "Entrée pointée",
+        header: "Heure d’entrée",
         render: (row) => row.actual_entry ?? "—",
     },
     {
-        key: "planned_exit",
-        header: "Heure sortie",
-        render: (row) => row.planned_exit ?? "—",
+        key: "entry_scanned_by",
+        header: "Compte sécurité (entrée)",
+        render: (row) => row.entry_scanned_by ?? "Compte non enregistré",
     },
     {
         key: "actual_exit",
-        header: "Sortie pointée",
+        header: "Heure de sortie",
         render: (row) => row.actual_exit ?? "—",
+    },
+    {
+        key: "exit_scanned_by",
+        header: "Compte sécurité (sortie)",
+        render: (row) => row.exit_scanned_by ?? "Compte non enregistré",
     },
     {
         key: "status",
@@ -133,15 +133,15 @@ function AttendanceHistoryContent({
             downloadFile(
                 `${filename}.csv`,
                 toCsv(
-                    ["Date", "Employé", "Matricule", "Heure entrée prévue", "Entrée pointée", "Heure sortie prévue", "Sortie pointée", "Statut", "Description"],
+                    ["Date", "Employé", "Matricule", "Heure d’entrée", "Compte sécurité (entrée)", "Heure de sortie", "Compte sécurité (sortie)", "Statut", "Description"],
                     rows.map((row) => [
                         date,
                         row.employee.full_name,
                         row.employee.employee_number,
-                        row.planned_entry ?? "",
                         row.actual_entry ?? "",
-                        row.planned_exit ?? "",
+                        row.entry_scanned_by ?? "Compte non enregistré",
                         row.actual_exit ?? "",
+                        row.exit_scanned_by ?? "Compte non enregistré",
                         row.status_label,
                         row.description,
                     ]),

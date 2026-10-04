@@ -99,7 +99,7 @@ class AttendanceController extends Controller
             ->get();
 
         $events = AttendanceEvent::query()
-            ->with(['employee', 'badge', 'device'])
+            ->with(['employee', 'badge', 'device', 'scannedBy'])
             ->whereBetween('occurred_at', [$date->startOfDay(), $date->endOfDay()])
             ->whereHas(
                 'employee',
@@ -160,6 +160,7 @@ class AttendanceController extends Controller
                     ->orderByDesc('starts_on'),
                 'workSchedules.workSchedule.days',
                 'attendanceEvents' => fn ($query) => $query
+                    ->with('scannedBy')
                     ->whereBetween('occurred_at', [$date->startOfDay(), $date->endOfDay()])
                     ->orderBy('occurred_at')
                     ->orderBy('id'),
@@ -266,10 +267,10 @@ class AttendanceController extends Controller
                     'employee_number' => $employee->employee_number,
                     'full_name' => $employee->fullName(),
                 ],
-                'planned_entry' => $plannedEntry,
                 'actual_entry' => $entryEvent?->occurred_at?->setTimezone($timezone)->format('H:i'),
-                'planned_exit' => $plannedExit,
+                'entry_scanned_by' => $entryEvent?->scannedBy?->name,
                 'actual_exit' => $exitEvent?->occurred_at?->setTimezone($timezone)->format('H:i'),
+                'exit_scanned_by' => $exitEvent?->scannedBy?->name,
                 'status' => $status,
                 'status_label' => $statusLabel,
                 'category' => $category,
@@ -311,7 +312,7 @@ class AttendanceController extends Controller
         }
 
         $events = AttendanceEvent::query()
-            ->with(['employee', 'badge', 'device'])
+            ->with(['employee', 'badge', 'device', 'scannedBy'])
             ->whereBetween('occurred_at', [$from, $to])
             ->whereHas(
                 'employee',
@@ -426,7 +427,9 @@ class AttendanceController extends Controller
         return response()->json([
             'employee' => (new EmployeeResource($employee->load(['direction', 'department'])))->resolve($request),
             'attendance' => (new AttendanceResource($attendance))->resolve($request),
-            'events' => AttendanceEventResource::collection($this->attendance->eventsFor($employee, $date)),
+            'events' => AttendanceEventResource::collection(
+                $this->attendance->eventsFor($employee, $date)->load('scannedBy'),
+            ),
         ]);
     }
 

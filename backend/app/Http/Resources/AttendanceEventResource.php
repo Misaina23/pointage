@@ -28,6 +28,10 @@ class AttendanceEventResource extends JsonResource
             ],
             'badge_number' => $this->badge?->badge_number,
             'device_code' => $this->device?->device_code,
+            'scanned_by' => $this->whenLoaded('scannedBy', fn () => $this->scannedBy === null ? null : [
+                'id' => $this->scannedBy->id,
+                'name' => $this->scannedBy->name,
+            ]),
         ];
     }
 }

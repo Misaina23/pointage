@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AbsenceType;
+use App\Models\Attendance;
 use App\Models\AttendanceEvent;
 use App\Models\Badge;
 use App\Models\Device;
@@ -45,12 +46,21 @@ class AttendanceScanTest extends TestCase
         ]);
 
         $response->assertCreated();
-        $this->assertDatabaseHas('attendances', [
+        $securityUser = User::query()
+            ->whereHas('roles', fn ($query) => $query->where('slug', 'securite'))
+            ->firstOrFail();
+        $response->assertJsonPath('data.scanned_by.id', $securityUser->id)
+            ->assertJsonPath('data.scanned_by.name', $securityUser->name);
+        $this->assertDatabaseHas('attendance_events', [
             'employee_id' => $employee->id,
-            'attendance_date' => '2026-10-05',
-            'first_entry' => '08:00:00',
-            'status' => 'present',
+            'scanned_by_user_id' => $securityUser->id,
         ]);
+        $attendance = Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('attendance_date', '2026-10-05')
+            ->firstOrFail();
+        $this->assertSame('08:00:00', $attendance->first_entry);
+        $this->assertSame('present', $attendance->status);
 
         Auth::forgetGuards();
         $this->withToken($adminToken)
@@ -73,11 +83,11 @@ class AttendanceScanTest extends TestCase
             'occurred_at' => '2026-10-04T21:30:00Z',
         ])->assertCreated();
 
-        $this->assertDatabaseHas('attendances', [
-            'employee_id' => $employee->id,
-            'attendance_date' => '2026-10-05',
-            'first_entry' => '00:30:00',
-        ]);
+        $attendance = Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('attendance_date', '2026-10-05')
+            ->firstOrFail();
+        $this->assertSame('00:30:00', $attendance->first_entry);
     }
 
     public function test_attendance_overview_combines_scans_and_leave_permission_and_absence_statuses(): void
@@ -90,6 +100,7 @@ class AttendanceScanTest extends TestCase
         $onPermission = $this->makeEmployee();
         $declaredAbsent = $this->makeEmployee();
         $notPunched = $this->makeEmployee();
+        $securityUser = User::factory()->create(['name' => 'Agent sécurité test']);
 
         foreach ([$onTime, $late, $onLeave, $onPermission, $declaredAbsent, $notPunched] as $employee) {
             $employee->workSchedules()->create([
@@ -98,8 +109,9 @@ class AttendanceScanTest extends TestCase
             ]);
         }
 
-        $this->createEvent($onTime, 'entry', '08:05:00', $date);
+        $this->createEvent($onTime, 'entry', '08:05:00', $date, $securityUser->id);
         $this->createEvent($late, 'entry', '08:11:00', $date);
+        $this->createEvent($onTime, 'exit', '17:05:00', $date, $securityUser->id);
 
         $leaveType = LeaveType::query()->create([
             'name' => 'Congé annuel',
@@ -148,9 +160,10 @@ class AttendanceScanTest extends TestCase
             ->assertJsonPath('summary.absent', 1);
 
         $rows = collect($response->json('data'))->keyBy('employee.id');
-        $this->assertSame('08:00', $rows[$onTime->id]['planned_entry']);
         $this->assertSame('08:05', $rows[$onTime->id]['actual_entry']);
-        $this->assertSame('17:00', $rows[$onTime->id]['planned_exit']);
+        $this->assertSame('Agent sécurité test', $rows[$onTime->id]['entry_scanned_by']);
+        $this->assertSame('17:05', $rows[$onTime->id]['actual_exit']);
+        $this->assertSame('Agent sécurité test', $rows[$onTime->id]['exit_scanned_by']);
         $this->assertSame('on_time', $rows[$onTime->id]['status']);
         $this->assertSame('late', $rows[$late->id]['status']);
         $this->assertSame('Congé annuel', $rows[$onLeave->id]['description']);
@@ -401,10 +414,16 @@ class AttendanceScanTest extends TestCase
         ];
     }
 
-    private function createEvent(Employee $employee, string $eventType, string $time, string $date): void
-    {
+    private function createEvent(
+        Employee $employee,
+        string $eventType,
+        string $time,
+        string $date,
+        ?int $scannedByUserId = null,
+    ): void {
         AttendanceEvent::query()->create([
             'employee_id' => $employee->id,
+            'scanned_by_user_id' => $scannedByUserId,
             'event_type' => $eventType,
             'occurred_at' => CarbonImmutable::parse("{$date} {$time}", config('app.timezone')),
             'source' => 'security_scan',

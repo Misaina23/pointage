@@ -8,8 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class AttendanceEvent extends Model
 {
     protected $fillable = [
-        'employee_id', 'badge_id', 'device_id', 'client_event_id', 'event_type', 'occurred_at',
-        'source', 'latitude', 'longitude', 'metadata',
+        'employee_id', 'badge_id', 'device_id', 'scanned_by_user_id', 'client_event_id',
+        'event_type', 'occurred_at', 'source', 'latitude', 'longitude', 'metadata',
     ];
 
     protected function casts(): array
@@ -30,5 +30,10 @@ class AttendanceEvent extends Model
     public function device(): BelongsTo
     {
         return $this->belongsTo(Device::class);
+    }
+
+    public function scannedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'scanned_by_user_id');
     }
 }

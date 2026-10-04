@@ -80,7 +80,7 @@ class DashboardController extends Controller
         return response()->json([
             'data' => (new AttendanceResource($attendance))->resolve($request),
             'events' => AttendanceEventResource::collection(
-                $this->attendance->eventsFor($employee, $date)
+                $this->attendance->eventsFor($employee, $date)->load('scannedBy'),
             ),
         ]);
     }

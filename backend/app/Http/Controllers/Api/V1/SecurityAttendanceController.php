@@ -27,7 +27,7 @@ class SecurityAttendanceController extends Controller
         $this->authorizeHistoryDate($date);
 
         $scans = AttendanceEvent::query()
-            ->with(['employee', 'badge', 'device'])
+            ->with(['employee', 'badge', 'device', 'scannedBy'])
             ->whereBetween('occurred_at', [$date->startOfDay(), $date->endOfDay()])
             ->when($request->filled('device_code'), fn ($query) => $query
                 ->whereHas('device', fn ($scope) => $scope->where('device_code', $request->string('device_code'))))
@@ -55,7 +55,9 @@ class SecurityAttendanceController extends Controller
 
         return response()->json([
             'data' => $attendance,
-            'events' => AttendanceEventResource::collection($this->attendance->eventsFor($employee, $date))->resolve($request),
+            'events' => AttendanceEventResource::collection(
+                $this->attendance->eventsFor($employee, $date)->load('scannedBy'),
+            )->resolve($request),
         ]);
     }
 

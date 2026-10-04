@@ -6,12 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendanceEventResource;
 use App\Http\Resources\AttendanceResource;
 use App\Http\Resources\EmployeeResource;
+use App\Models\AbsenceRecord;
 use App\Models\Attendance;
 use App\Models\AttendanceAnomaly;
 use App\Models\AttendanceEvent;
 use App\Models\Employee;
+use App\Models\LeaveRequest;
+use App\Models\PermissionRequest;
 use App\Services\AttendanceService;
 use App\Services\EmployeeAccessService;
+use App\Services\ScheduleService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -122,6 +126,172 @@ class AttendanceController extends Controller
             ],
             'attendances' => AttendanceResource::collection($attendances),
             'events' => AttendanceEventResource::collection($events),
+        ]);
+    }
+
+    /**
+     * Pointage consolidé avec horaires prévus, scans et motifs d'absence.
+     */
+    public function overview(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Attendance::class);
+
+        $validated = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+        ]);
+        $date = CarbonImmutable::parse($validated['date'] ?? CarbonImmutable::now()->toDateString());
+        $this->authorizeHistoryDate($date);
+        $dateString = $date->toDateString();
+        $timezone = config('app.timezone');
+
+        $employees = $this->employees->limitToVisibleEmployees(
+            Employee::query()->where('status', 'active'),
+            $request->user(),
+            includeSecurityTeam: true,
+        )
+            ->when(isset($validated['department_id']), fn ($query) => $query->where('department_id', $validated['department_id']))
+            ->with([
+                'workSchedules' => fn ($query) => $query
+                    ->whereDate('starts_on', '<=', $dateString)
+                    ->where(fn ($assignment) => $assignment
+                        ->whereNull('ends_on')
+                        ->orWhereDate('ends_on', '>=', $dateString))
+                    ->orderByDesc('starts_on'),
+                'workSchedules.workSchedule.days',
+                'attendanceEvents' => fn ($query) => $query
+                    ->whereBetween('occurred_at', [$date->startOfDay(), $date->endOfDay()])
+                    ->orderBy('occurred_at')
+                    ->orderBy('id'),
+            ])
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get();
+
+        $employeeIds = $employees->modelKeys();
+        $leaveRequests = LeaveRequest::query()
+            ->with('leaveType')
+            ->whereIn('employee_id', $employeeIds)
+            ->where('status', 'approved')
+            ->whereDate('starts_on', '<=', $dateString)
+            ->whereDate('ends_on', '>=', $dateString)
+            ->get()
+            ->groupBy('employee_id');
+        $permissionRequests = PermissionRequest::query()
+            ->with('permissionType')
+            ->whereIn('employee_id', $employeeIds)
+            ->where('status', 'approved')
+            ->whereDate('permission_date', $dateString)
+            ->get()
+            ->groupBy('employee_id');
+        $absenceRecords = AbsenceRecord::query()
+            ->with('absenceType')
+            ->whereIn('employee_id', $employeeIds)
+            ->whereIn('status', ['approved', 'pending'])
+            ->whereDate('starts_on', '<=', $dateString)
+            ->where(fn ($query) => $query
+                ->whereNull('ends_on')
+                ->orWhereDate('ends_on', '>=', $dateString))
+            ->get()
+            ->groupBy('employee_id');
+
+        $isHoliday = app(ScheduleService::class)->isHoliday($date);
+        $rows = $employees->map(function (Employee $employee) use (
+            $date,
+            $timezone,
+            $leaveRequests,
+            $permissionRequests,
+            $absenceRecords,
+            $isHoliday,
+        ): array {
+            $assignment = $employee->workSchedules->first();
+            $schedule = $assignment?->workSchedule;
+            $day = $schedule?->is_active
+                ? $schedule->days->firstWhere('day_of_week', $date->isoWeekday())
+                : null;
+            $plannedEntry = $day?->starts_at === null ? null : substr($day->starts_at, 0, 5);
+            $plannedExit = $day?->ends_at === null ? null : substr($day->ends_at, 0, 5);
+            $entryEvent = $employee->attendanceEvents->firstWhere('event_type', 'entry');
+            $exitEvent = $employee->attendanceEvents->where('event_type', 'exit')->last();
+            $leave = $leaveRequests->get($employee->id)?->first();
+            $permission = $permissionRequests->get($employee->id)?->first();
+            $absence = $absenceRecords->get($employee->id)?->first();
+            $status = 'absent';
+            $statusLabel = 'Absent';
+            $description = 'Aucun pointage, congé ou permission enregistré.';
+            $category = 'absent';
+
+            if ($leave !== null) {
+                $status = 'leave';
+                $statusLabel = 'En congé';
+                $description = $leave->leaveType?->name ?? 'Congé approuvé';
+                $category = 'leave';
+            } elseif ($permission !== null) {
+                $status = 'permission';
+                $statusLabel = 'En permission';
+                $description = $permission->permissionType?->name ?? 'Permission approuvée';
+                $category = 'permission';
+            } elseif ($absence !== null) {
+                $status = 'absence';
+                $statusLabel = 'Absence déclarée';
+                $description = $absence->reason
+                    ?: ($absence->absenceType?->name ?? 'Absence déclarée');
+                $category = 'absence';
+            } elseif ($isHoliday) {
+                $status = 'holiday';
+                $statusLabel = 'Jour férié';
+                $description = 'Jour férié';
+                $category = 'other';
+            } elseif ($plannedEntry === null || $plannedExit === null) {
+                $status = 'rest_day';
+                $statusLabel = 'Repos / non planifié';
+                $description = 'Aucun horaire de travail prévu.';
+                $category = 'other';
+            } elseif ($entryEvent !== null) {
+                $expectedEntry = $date->setTimeFromTimeString($plannedEntry);
+                $actualEntry = $entryEvent->occurred_at?->setTimezone($timezone);
+                $tolerance = $schedule?->late_tolerance_minutes ?? 0;
+                $isLate = $actualEntry !== null && $actualEntry->greaterThan($expectedEntry->addMinutes($tolerance));
+                $status = $isLate ? 'late' : 'on_time';
+                $statusLabel = $isLate ? 'En retard' : 'À l’heure';
+                $description = $statusLabel;
+                $category = 'attendance';
+            } else {
+                $category = 'absent';
+            }
+
+            return [
+                'employee' => [
+                    'id' => $employee->id,
+                    'employee_number' => $employee->employee_number,
+                    'full_name' => $employee->fullName(),
+                ],
+                'planned_entry' => $plannedEntry,
+                'actual_entry' => $entryEvent?->occurred_at?->setTimezone($timezone)->format('H:i'),
+                'planned_exit' => $plannedExit,
+                'actual_exit' => $exitEvent?->occurred_at?->setTimezone($timezone)->format('H:i'),
+                'status' => $status,
+                'status_label' => $statusLabel,
+                'category' => $category,
+                'description' => $description,
+                'starts_on' => $leave?->starts_on?->toDateString() ?? $absence?->starts_on?->toDateString() ?? $permission?->permission_date?->toDateString(),
+                'ends_on' => $leave?->ends_on?->toDateString() ?? $absence?->ends_on?->toDateString() ?? $permission?->permission_date?->toDateString(),
+                'permission_starts_at' => $permission?->starts_at,
+                'permission_ends_at' => $permission?->ends_at,
+            ];
+        })->values();
+
+        return response()->json([
+            'date' => $dateString,
+            'summary' => [
+                'on_time' => $rows->where('status', 'on_time')->count(),
+                'late' => $rows->where('status', 'late')->count(),
+                'absent' => $rows->where('status', 'absent')->count(),
+                'leave' => $rows->where('status', 'leave')->count(),
+                'permission' => $rows->where('status', 'permission')->count(),
+                'absence' => $rows->where('status', 'absence')->count(),
+            ],
+            'data' => $rows,
         ]);
     }
 

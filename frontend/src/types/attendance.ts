@@ -84,6 +84,39 @@ export type AttendanceToday = {
     events: PaginatedAttendance<AttendanceEvent>;
 };
 
+export type AttendanceOverviewRow = {
+    employee: {
+        id: number;
+        employee_number: string;
+        full_name: string;
+    };
+    planned_entry: string | null;
+    actual_entry: string | null;
+    planned_exit: string | null;
+    actual_exit: string | null;
+    status: "on_time" | "late" | "absent" | "leave" | "permission" | "absence" | "holiday" | "rest_day";
+    status_label: string;
+    category: "attendance" | "leave" | "permission" | "absence" | "absent" | "other";
+    description: string;
+    starts_on: string | null;
+    ends_on: string | null;
+    permission_starts_at: string | null;
+    permission_ends_at: string | null;
+};
+
+export type AttendanceOverview = {
+    date: string;
+    summary: {
+        on_time: number;
+        late: number;
+        absent: number;
+        leave: number;
+        permission: number;
+        absence: number;
+    };
+    data: AttendanceOverviewRow[];
+};
+
 export type PaginatedAttendance<T> = {
     data: T[];
     meta?: { current_page: number; last_page: number; total: number };

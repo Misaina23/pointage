@@ -1,17 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Card, DataTable } from "@/components/ui";
-import type { Column } from "@/components/ui";
+import { Badge, Card, DataTable } from "@/components/ui";
+import type { BadgeTone, Column } from "@/components/ui";
 import { StatCard, StatGrid } from "@/components/dashboard";
 import { useNotifications } from "@/components/providers/NotificationProvider";
 import { ExportButtons, downloadFile, toCsv } from "@/components/reports";
-import { useAttendance } from "@/hooks/useAttendance";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { recomputeAttendance } from "@/services/api/attendance";
-import { formatTime } from "@/lib/formatters";
-import { AttendanceTable } from "./AttendanceTable";
-import type { AttendanceEvent } from "@/types/attendance";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { todayIso } from "@/lib/dates";
+import { getAttendanceOverview, recomputeAttendance } from "@/services/api/attendance";
+import type { AttendanceOverview, AttendanceOverviewRow } from "@/types/attendance";
 
 type AttendanceHistoryProps = {
     eyebrow: string;
@@ -20,44 +19,64 @@ type AttendanceHistoryProps = {
     canRecompute?: boolean;
 };
 
-const eventColumns: Column<AttendanceEvent>[] = [
+const columns: Column<AttendanceOverviewRow>[] = [
     {
         key: "employee",
         header: "Employé",
-        render: (event) => (
+        render: (row) => (
             <div className="table-person">
                 <span className="employee-avatar" aria-hidden>
-                    {event.employee.first_name.charAt(0)}
-                    {event.employee.last_name.charAt(0)}
+                    {row.employee.full_name.charAt(0)}
                 </span>
                 <span>
-                    <strong>{event.employee.first_name} {event.employee.last_name}</strong>
-                    <small>{event.employee.employee_number}</small>
+                    <strong>{row.employee.full_name}</strong>
+                    <small>{row.employee.employee_number}</small>
                 </span>
             </div>
         ),
     },
     {
-        key: "action",
-        header: "Action",
-        render: (event) => event.event_type === "entry" ? "Entrée" : "Sortie",
+        key: "planned_entry",
+        header: "Heure entrée",
+        render: (row) => row.planned_entry ?? "—",
     },
     {
-        key: "time",
-        header: "Heure",
-        render: (event) => formatTime(event.occurred_at),
+        key: "actual_entry",
+        header: "Entrée pointée",
+        render: (row) => row.actual_entry ?? "—",
     },
     {
-        key: "badge",
-        header: "Badge",
-        render: (event) => event.badge_number ?? "—",
+        key: "planned_exit",
+        header: "Heure sortie",
+        render: (row) => row.planned_exit ?? "—",
     },
     {
-        key: "device",
-        header: "Terminal",
-        render: (event) => event.device_code ?? "—",
+        key: "actual_exit",
+        header: "Sortie pointée",
+        render: (row) => row.actual_exit ?? "—",
+    },
+    {
+        key: "status",
+        header: "Statut",
+        render: (row) => <Badge tone={statusTone(row.status)}>{row.status_label}</Badge>,
     },
 ];
+
+function statusTone(status: AttendanceOverviewRow["status"]): BadgeTone {
+    if (status === "on_time") {
+        return "positive";
+    }
+
+    if (status === "late" || status === "absence") {
+        return "pending";
+    }
+
+    if (status === "absent") {
+        return "negative";
+    }
+
+    return "neutral";
+}
 
 export function AttendanceHistoryPage(props: AttendanceHistoryProps) {
     const { roles } = useAuth();
@@ -81,22 +100,17 @@ function AttendanceHistoryContent({
     subtitle,
     canRecompute = false,
 }: AttendanceHistoryProps) {
-    const attendance = useAttendance(undefined, false, true, true);
+    const [date, setDate] = useState(todayIso());
+    const overview = useAsyncData<AttendanceOverview>(
+        (signal) => getAttendanceOverview(date, signal),
+        [date],
+    );
     const { notify } = useNotifications();
     const [recomputing, setRecomputing] = useState(false);
-    const rows = (attendance.today?.attendances.data ?? []).map((row) => ({
-        attendance: row,
-        employee: row.employee ?? null,
-    }));
+    const rows = overview.data?.data ?? [];
 
     const handleExport = (format: "csv" | "json" | "xlsx") => {
-        if (
-            attendance.todayLoading ||
-            attendance.eventsLoading ||
-            attendance.todayError ||
-            attendance.eventsError ||
-            !attendance.today
-        ) {
+        if (overview.loading || overview.error || !overview.data) {
             notify("Les pointages ne sont pas complètement chargés : l’export est annulé.", "error");
 
             return;
@@ -108,64 +122,29 @@ function AttendanceHistoryContent({
             return;
         }
 
-        const filename = `pointagemisaina-pointages-${attendance.date}`;
-        const employeeName = (employeeId: number) => {
-            const employee = rows.find((row) => row.attendance.employee_id === employeeId)?.employee;
-
-            return employee ? `${employee.first_name} ${employee.last_name}` : `#${employeeId}`;
-        };
-
+        const filename = `pointagemisaina-pointages-${date}`;
         if (format === "json") {
             downloadFile(
                 `${filename}.json`,
-                JSON.stringify({
-                    date: attendance.date,
-                    summary: attendance.today.summary,
-                    attendance: rows.map(({ attendance: row, employee }) => ({
-                        ...row,
-                        employee,
-                    })),
-                    events: attendance.events,
-                }, null, 2),
+                JSON.stringify(overview.data, null, 2),
                 "application/json;charset=utf-8",
             );
         } else {
             downloadFile(
                 `${filename}.csv`,
                 toCsv(
-                    ["Date", "Type", "Employé", "Matricule", "Action", "Heure évènement", "Entrée", "Sortie", "Minutes travaillées", "Retard (min)", "Heures sup. (min)", "Badge", "Terminal"],
-                    [
-                        ...rows.map(({ attendance: row, employee }) => [
-                            row.attendance_date,
-                            "Présence",
-                            employee?.full_name ?? employeeName(row.employee_id),
-                            employee?.employee_number ?? "",
-                            row.status,
-                            "",
-                            row.first_entry ?? "",
-                            row.last_exit ?? "",
-                            row.worked_minutes,
-                            row.late_minutes,
-                            row.overtime_minutes,
-                            "",
-                            "",
-                        ]),
-                        ...attendance.events.map((event) => [
-                            attendance.date,
-                            "Événement",
-                            `${event.employee.first_name} ${event.employee.last_name}`,
-                            event.employee.employee_number,
-                            event.event_type === "entry" ? "Entrée" : "Sortie",
-                            formatTime(event.occurred_at),
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            event.badge_number ?? "",
-                            event.device_code ?? "",
-                        ]),
-                    ],
+                    ["Date", "Employé", "Matricule", "Heure entrée prévue", "Entrée pointée", "Heure sortie prévue", "Sortie pointée", "Statut", "Description"],
+                    rows.map((row) => [
+                        date,
+                        row.employee.full_name,
+                        row.employee.employee_number,
+                        row.planned_entry ?? "",
+                        row.actual_entry ?? "",
+                        row.planned_exit ?? "",
+                        row.actual_exit ?? "",
+                        row.status_label,
+                        row.description,
+                    ]),
                 ),
             );
         }
@@ -177,9 +156,9 @@ function AttendanceHistoryContent({
         setRecomputing(true);
 
         try {
-            const result = await recomputeAttendance({ date: attendance.date });
-            attendance.reload();
-            notify(`${result.processed} présence(s) recalculée(s).`, "success");
+            await recomputeAttendance({ date });
+            overview.reload();
+            notify("Présences recalculées.", "success");
         } catch (caught) {
             notify(caught instanceof Error ? caught.message : "Recalcul impossible.", "error");
         } finally {
@@ -201,19 +180,19 @@ function AttendanceHistoryContent({
                         <input
                             type="date"
                             className="form-control"
-                            value={attendance.date}
-                            onChange={(event) => attendance.setDate(event.target.value)}
+                            value={date}
+                            onChange={(event) => setDate(event.target.value)}
                         />
                     </label>
-                    <ExportButtons
-                        onExport={handleExport}
-                        disabled={
-                            attendance.todayLoading ||
-                            attendance.eventsLoading ||
-                            Boolean(attendance.todayError) ||
-                            Boolean(attendance.eventsError)
-                        }
-                    />
+                    <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={overview.reload}
+                        disabled={overview.loading}
+                    >
+                        Actualiser
+                    </button>
+                    <ExportButtons onExport={handleExport} disabled={overview.loading || Boolean(overview.error)} />
                     {canRecompute && (
                         <button
                             type="button"
@@ -228,35 +207,25 @@ function AttendanceHistoryContent({
             </header>
 
             <StatGrid>
-                <StatCard label="Présents" value={attendance.today?.summary.present ?? 0} />
-                <StatCard label="Retards" value={attendance.today?.summary.late ?? 0} tone="yellow" />
-                <StatCard label="Absents" value={attendance.today?.summary.absent ?? 0} tone="red" />
+                <StatCard label="À l’heure" value={overview.data?.summary.on_time ?? 0} />
+                <StatCard label="Retards" value={overview.data?.summary.late ?? 0} tone="yellow" />
+                <StatCard label="Absents" value={overview.data?.summary.absent ?? 0} tone="red" />
+                <StatCard label="En congé" value={overview.data?.summary.leave ?? 0} />
             </StatGrid>
 
-            <Card title={`Pointages du ${attendance.date}`}>
-                {attendance.todayError ? (
+            <Card title={`Pointages du ${date}`}>
+                {overview.error ? (
                     <p className="form-error" role="alert">
-                        Impossible de charger les présences : {attendance.todayError}
+                        Impossible de charger les pointages : {overview.error}
                     </p>
-                ) : attendance.todayLoading ? (
-                    <p className="empty-history">Chargement des présences…</p>
-                ) : (
-                    <AttendanceTable rows={rows} />
-                )}
-            </Card>
-            <Card title={`Scans enregistrés — ${attendance.date}`}>
-                {attendance.eventsError ? (
-                    <p className="form-error" role="alert">
-                        Impossible de charger les scans : {attendance.eventsError}
-                    </p>
-                ) : attendance.eventsLoading ? (
-                    <p className="empty-history">Chargement des scans…</p>
+                ) : overview.loading ? (
+                    <p className="empty-history">Chargement des pointages…</p>
                 ) : (
                     <DataTable
-                        columns={eventColumns}
-                        rows={attendance.events}
-                        rowKey={(event) => event.id}
-                        emptyLabel="Aucun scan enregistré pour cette date."
+                        columns={columns}
+                        rows={rows}
+                        rowKey={(row) => row.employee.id}
+                        emptyLabel="Aucun employé actif trouvé pour cette date."
                         pageSize={10}
                     />
                 )}

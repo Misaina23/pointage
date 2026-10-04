@@ -4,6 +4,7 @@ import type {
     AttendanceAnomaly,
     AttendanceEvent,
     AttendanceFilters,
+    AttendanceOverview,
     AttendanceToday,
     EventFilters,
     PaginatedAttendance,
@@ -25,6 +26,13 @@ export function getAttendanceToday(
     signal?: AbortSignal,
 ): Promise<AttendanceToday> {
     return get<AttendanceToday>("/attendance/today", { date }, signal);
+}
+
+export function getAttendanceOverview(
+    date?: string,
+    signal?: AbortSignal,
+): Promise<AttendanceOverview> {
+    return get<AttendanceOverview>("/attendance/overview", { date }, signal);
 }
 
 export function listAttendanceEvents(

@@ -2,13 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Models\AbsenceType;
 use App\Models\AttendanceEvent;
 use App\Models\Badge;
 use App\Models\Device;
 use App\Models\Employee;
+use App\Models\LeaveType;
+use App\Models\PermissionType;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AttendanceService;
+use Carbon\CarbonImmutable;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
@@ -37,7 +41,7 @@ class AttendanceScanTest extends TestCase
             'badge_public_id' => $badge->public_id,
             'event_type' => 'entry',
             'client_event_id' => Str::uuid()->toString(),
-            'occurred_at' => '2026-10-04T21:00:00Z',
+            'occurred_at' => '2026-10-05T05:00:00Z',
         ]);
 
         $response->assertCreated();
@@ -74,6 +78,85 @@ class AttendanceScanTest extends TestCase
             'attendance_date' => '2026-10-05',
             'first_entry' => '00:30:00',
         ]);
+    }
+
+    public function test_attendance_overview_combines_scans_and_leave_permission_and_absence_statuses(): void
+    {
+        $date = '2026-10-05';
+        $schedule = $this->makeStandardSchedule();
+        $onTime = $this->makeEmployee();
+        $late = $this->makeEmployee();
+        $onLeave = $this->makeEmployee();
+        $onPermission = $this->makeEmployee();
+        $declaredAbsent = $this->makeEmployee();
+        $notPunched = $this->makeEmployee();
+
+        foreach ([$onTime, $late, $onLeave, $onPermission, $declaredAbsent, $notPunched] as $employee) {
+            $employee->workSchedules()->create([
+                'work_schedule_id' => $schedule->id,
+                'starts_on' => $date,
+            ]);
+        }
+
+        $this->createEvent($onTime, 'entry', '08:05:00', $date);
+        $this->createEvent($late, 'entry', '08:11:00', $date);
+
+        $leaveType = LeaveType::query()->create([
+            'name' => 'Congé annuel',
+            'code' => 'ANNUEL-'.Str::upper(Str::random(6)),
+        ]);
+        $onLeave->leaveRequests()->create([
+            'leave_type_id' => $leaveType->id,
+            'starts_on' => $date,
+            'ends_on' => $date,
+            'requested_days' => 1,
+            'reason' => 'Congé approuvé',
+            'status' => 'approved',
+        ]);
+        $permissionType = PermissionType::query()->create([
+            'name' => 'Permission personnelle',
+            'code' => 'PERS-'.Str::upper(Str::random(6)),
+        ]);
+        $onPermission->permissionRequests()->create([
+            'permission_type_id' => $permissionType->id,
+            'permission_date' => $date,
+            'starts_at' => '10:00:00',
+            'ends_at' => '11:00:00',
+            'reason' => 'Rendez-vous',
+            'status' => 'approved',
+        ]);
+        $absenceType = AbsenceType::query()->create([
+            'name' => 'Absence justifiée',
+            'code' => 'ABS-'.Str::upper(Str::random(6)),
+        ]);
+        $declaredAbsent->absenceRecords()->create([
+            'absence_type_id' => $absenceType->id,
+            'starts_on' => $date,
+            'ends_on' => $date,
+            'reason' => 'Maladie',
+            'status' => 'approved',
+        ]);
+
+        $response = $this->withToken($this->createTokenForRole('administrateur'))
+            ->getJson("/api/v1/attendance/overview?date={$date}")
+            ->assertOk()
+            ->assertJsonPath('summary.on_time', 1)
+            ->assertJsonPath('summary.late', 1)
+            ->assertJsonPath('summary.leave', 1)
+            ->assertJsonPath('summary.permission', 1)
+            ->assertJsonPath('summary.absence', 1)
+            ->assertJsonPath('summary.absent', 1);
+
+        $rows = collect($response->json('data'))->keyBy('employee.id');
+        $this->assertSame('08:00', $rows[$onTime->id]['planned_entry']);
+        $this->assertSame('08:05', $rows[$onTime->id]['actual_entry']);
+        $this->assertSame('17:00', $rows[$onTime->id]['planned_exit']);
+        $this->assertSame('on_time', $rows[$onTime->id]['status']);
+        $this->assertSame('late', $rows[$late->id]['status']);
+        $this->assertSame('Congé annuel', $rows[$onLeave->id]['description']);
+        $this->assertSame('Permission personnelle', $rows[$onPermission->id]['description']);
+        $this->assertSame('Maladie', $rows[$declaredAbsent->id]['description']);
+        $this->assertSame('Aucun pointage, congé ou permission enregistré.', $rows[$notPunched->id]['description']);
     }
 
     public function test_security_user_can_record_an_entry_with_a_badge(): void
@@ -316,5 +399,15 @@ class AttendanceScanTest extends TestCase
             'client_event_id' => Str::uuid()->toString(),
             'occurred_at' => now()->toIso8601String(),
         ];
+    }
+
+    private function createEvent(Employee $employee, string $eventType, string $time, string $date): void
+    {
+        AttendanceEvent::query()->create([
+            'employee_id' => $employee->id,
+            'event_type' => $eventType,
+            'occurred_at' => CarbonImmutable::parse("{$date} {$time}", config('app.timezone')),
+            'source' => 'security_scan',
+        ]);
     }
 }

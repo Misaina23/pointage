@@ -29,6 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 item("/admin/badges", "Badges", "badges"),
                 item("/admin/appareils", "Appareils", "devices"),
                 item("/admin/pointages", "Pointages", "attendance"),
+                item("/admin/suivi-absences", "Congés et absences", "absences"),
                 item("/admin/journal", "Journal", "journal"),
             ],
         },
@@ -39,6 +40,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         item("/admin/utilisateurs", "Utilisateurs", "employees"),
         item("/admin/directions", "Org.", "organization"),
         item("/admin/pointages", "Pointages", "attendance"),
+        item("/admin/suivi-absences", "Absences", "absences"),
         item("/admin/badges", "Badges", "badges"),
         item("/admin/journal", "Journal", "journal"),
     ];

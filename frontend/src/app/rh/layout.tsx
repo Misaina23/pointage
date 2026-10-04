@@ -10,6 +10,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
                 item("/rh", "Tableau de bord", "dashboard", true),
                 item("/rh/rapports", "Rapports", "reports"),
                 item("/rh/pointages", "Pointages", "attendance"),
+                item("/rh/suivi-absences", "Suivi des absences", "absences"),
             ],
         },
         {
@@ -33,6 +34,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
         item("/rh", "Accueil", "dashboard", true),
         item("/rh/personnel", "Personnel", "employees"),
         item("/rh/pointages", "Pointages", "attendance"),
+        item("/rh/suivi-absences", "Absences", "absences"),
         item("/rh/rapports", "Rapports", "reports"),
     ];
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Card } from "@/components/ui";
+import { Card, DataTable } from "@/components/ui";
+import type { Column } from "@/components/ui";
 import { StatCard, StatGrid } from "@/components/dashboard";
 import { useNotifications } from "@/components/providers/NotificationProvider";
 import { ExportButtons, downloadFile, toCsv } from "@/components/reports";
@@ -10,6 +11,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { recomputeAttendance } from "@/services/api/attendance";
 import { formatTime } from "@/lib/formatters";
 import { AttendanceTable } from "./AttendanceTable";
+import type { AttendanceEvent } from "@/types/attendance";
 
 type AttendanceHistoryProps = {
     eyebrow: string;
@@ -17,6 +19,45 @@ type AttendanceHistoryProps = {
     subtitle: string;
     canRecompute?: boolean;
 };
+
+const eventColumns: Column<AttendanceEvent>[] = [
+    {
+        key: "employee",
+        header: "Employé",
+        render: (event) => (
+            <div className="table-person">
+                <span className="employee-avatar" aria-hidden>
+                    {event.employee.first_name.charAt(0)}
+                    {event.employee.last_name.charAt(0)}
+                </span>
+                <span>
+                    <strong>{event.employee.first_name} {event.employee.last_name}</strong>
+                    <small>{event.employee.employee_number}</small>
+                </span>
+            </div>
+        ),
+    },
+    {
+        key: "action",
+        header: "Action",
+        render: (event) => event.event_type === "entry" ? "Entrée" : "Sortie",
+    },
+    {
+        key: "time",
+        header: "Heure",
+        render: (event) => formatTime(event.occurred_at),
+    },
+    {
+        key: "badge",
+        header: "Badge",
+        render: (event) => event.badge_number ?? "—",
+    },
+    {
+        key: "device",
+        header: "Terminal",
+        render: (event) => event.device_code ?? "—",
+    },
+];
 
 export function AttendanceHistoryPage(props: AttendanceHistoryProps) {
     const { roles } = useAuth();
@@ -201,6 +242,23 @@ function AttendanceHistoryContent({
                     <p className="empty-history">Chargement des présences…</p>
                 ) : (
                     <AttendanceTable rows={rows} />
+                )}
+            </Card>
+            <Card title={`Scans enregistrés — ${attendance.date}`}>
+                {attendance.eventsError ? (
+                    <p className="form-error" role="alert">
+                        Impossible de charger les scans : {attendance.eventsError}
+                    </p>
+                ) : attendance.eventsLoading ? (
+                    <p className="empty-history">Chargement des scans…</p>
+                ) : (
+                    <DataTable
+                        columns={eventColumns}
+                        rows={attendance.events}
+                        rowKey={(event) => event.id}
+                        emptyLabel="Aucun scan enregistré pour cette date."
+                        pageSize={10}
+                    />
                 )}
             </Card>
         </>

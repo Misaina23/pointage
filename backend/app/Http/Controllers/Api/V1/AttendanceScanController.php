@@ -25,7 +25,8 @@ class AttendanceScanController extends Controller
     {
         $data = $request->validated();
         $badgeIdentifier = $data['badge_public_id'];
-        $occurredAt = CarbonImmutable::parse($data['occurred_at']);
+        $occurredAt = CarbonImmutable::parse($data['occurred_at'])
+            ->setTimezone(config('app.timezone'));
         $deviceCode = $data['device_code'] ?? null;
 
         $existingEvent = AttendanceEvent::query()

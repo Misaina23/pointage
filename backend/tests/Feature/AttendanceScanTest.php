@@ -37,7 +37,7 @@ class AttendanceScanTest extends TestCase
             'badge_public_id' => $badge->public_id,
             'event_type' => 'entry',
             'client_event_id' => Str::uuid()->toString(),
-            'occurred_at' => '2026-10-05T08:00:00+03:00',
+            'occurred_at' => '2026-10-04T21:00:00Z',
         ]);
 
         $response->assertCreated();
@@ -55,6 +55,25 @@ class AttendanceScanTest extends TestCase
             ->assertJsonPath('summary.present', 1)
             ->assertJsonPath('events.0.employee.id', $employee->id)
             ->assertJsonPath('events.0.event_type', 'entry');
+    }
+
+    public function test_scan_near_midnight_is_recomputed_for_the_local_attendance_date(): void
+    {
+        [$employee, $badge] = $this->createBadge();
+        $token = $this->createTokenForRole('securite');
+
+        $this->withToken($token)->postJson('/api/v1/attendance/scan', [
+            'badge_public_id' => $badge->public_id,
+            'event_type' => 'entry',
+            'client_event_id' => Str::uuid()->toString(),
+            'occurred_at' => '2026-10-04T21:30:00Z',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('attendances', [
+            'employee_id' => $employee->id,
+            'attendance_date' => '2026-10-05',
+            'first_entry' => '00:30:00',
+        ]);
     }
 
     public function test_security_user_can_record_an_entry_with_a_badge(): void

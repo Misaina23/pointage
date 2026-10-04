@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Card, DataTable } from "@/components/ui";
+import { Badge, Card, DataTable, Pagination } from "@/components/ui";
 import type { BadgeTone, Column } from "@/components/ui";
 import { StatCard, StatGrid } from "@/components/dashboard";
 import { useNotifications } from "@/components/providers/NotificationProvider";
@@ -102,6 +102,7 @@ function AttendanceHistoryContent({
     canRecompute = false,
 }: AttendanceHistoryProps) {
     const [date, setDate] = useState(todayIso());
+    const [mobilePage, setMobilePage] = useState(1);
     const overview = useAsyncData<AttendanceOverview>(
         (signal) => getAttendanceOverview(date, signal),
         [date],
@@ -110,6 +111,12 @@ function AttendanceHistoryContent({
     const [recomputing, setRecomputing] = useState(false);
     const rows = (overview.data?.data ?? []).filter(
         (row): row is PunctualityRow => row.category === "attendance",
+    );
+    const mobilePageSize = 10;
+    const mobileLastPage = Math.max(1, Math.ceil(rows.length / mobilePageSize));
+    const visibleMobileRows = rows.slice(
+        (Math.min(mobilePage, mobileLastPage) - 1) * mobilePageSize,
+        Math.min(mobilePage, mobileLastPage) * mobilePageSize,
     );
 
     const handleExport = (format: "csv" | "json" | "xlsx") => {
@@ -224,13 +231,58 @@ function AttendanceHistoryContent({
                 ) : overview.loading ? (
                     <p className="empty-history">Chargement des pointages…</p>
                 ) : (
-                    <DataTable
-                        columns={columns}
-                        rows={rows}
-                        rowKey={(row) => row.employee.id}
-                        emptyLabel="Aucun employé actif trouvé pour cette date."
-                        pageSize={10}
-                    />
+                    <>
+                        <div className="attendance-history-desktop">
+                            <DataTable
+                                columns={columns}
+                                rows={rows}
+                                rowKey={(row) => row.employee.id}
+                                emptyLabel="Aucun employé actif trouvé pour cette date."
+                                pageSize={10}
+                            />
+                        </div>
+                        <div className="attendance-history-mobile">
+                            {rows.length === 0 ? (
+                                <p className="empty-history">Aucun employé actif trouvé pour cette date.</p>
+                            ) : (
+                                visibleMobileRows.map((row) => (
+                                    <article className="attendance-mobile-card" key={row.employee.id}>
+                                        <div className="attendance-mobile-head">
+                                            <div className="table-person">
+                                                <span className="employee-avatar" aria-hidden>
+                                                    {row.employee.full_name.charAt(0)}
+                                                </span>
+                                                <span>
+                                                    <strong>{row.employee.full_name}</strong>
+                                                    <small>{row.employee.employee_number}</small>
+                                                </span>
+                                            </div>
+                                            <Badge tone={statusTone(row.status)}>{row.status_label}</Badge>
+                                        </div>
+                                        <div className="attendance-mobile-times">
+                                            <div>
+                                                <span>Entrée</span>
+                                                <strong>{row.actual_entry ?? "—"}</strong>
+                                                <small>{row.entry_scanned_by ?? "Sécurité non renseignée"}</small>
+                                            </div>
+                                            <div>
+                                                <span>Sortie</span>
+                                                <strong>{row.actual_exit ?? "—"}</strong>
+                                                <small>{row.exit_scanned_by ?? "Sécurité non renseignée"}</small>
+                                            </div>
+                                        </div>
+                                    </article>
+                                ))
+                            )}
+                            {rows.length > mobilePageSize && (
+                                <Pagination
+                                    currentPage={Math.min(mobilePage, mobileLastPage)}
+                                    lastPage={mobileLastPage}
+                                    onChange={setMobilePage}
+                                />
+                            )}
+                        </div>
+                    </>
                 )}
             </Card>
         </>

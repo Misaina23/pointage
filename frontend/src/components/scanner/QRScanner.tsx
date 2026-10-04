@@ -24,18 +24,21 @@ export function QRScanner({ deviceCode }: { deviceCode?: string | null }) {
     return (
         <div className="scanner-layout">
             <Card title="Lecture du badge" subtitle={`Terminal : ${deviceCode ?? "non défini"}`}>
+                <div className="scanner-mode-control">
+                    <span>Type de pointage</span>
+                    <SegmentedControl
+                        items={[
+                            { id: "entry", label: "Entrée" },
+                            { id: "exit", label: "Sortie" },
+                        ]}
+                        active={mode}
+                        onChange={(id) => setMode(id as EventType)}
+                    />
+                </div>
                 <ScannerCamera onDecoded={handleDecoded} />
                 <BarcodeScanner onDecoded={handleDecoded} />
             </Card>
             <Card title="Historique" subtitle={`${scanner.history.length} scan(s) sur cet appareil`}>
-                <SegmentedControl
-                    items={[
-                        { id: "entry", label: "Entrée" },
-                        { id: "exit", label: "Sortie" },
-                    ]}
-                    active={mode}
-                    onChange={(id) => setMode(id as EventType)}
-                />
                 <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
                     {scanner.message && <ResultBanner tone={scanner.message.tone}>{scanner.message.text}</ResultBanner>}
                     {last && <ScanResultBanner result={last} />}

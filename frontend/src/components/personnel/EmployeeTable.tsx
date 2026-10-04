@@ -222,14 +222,125 @@ export function EmployeeTable({
                     Impossible de charger le personnel : {employees.error}
                 </p>
             ) : (
-                <DataTable
-                    columns={columns}
-                    rows={employees.employees}
-                    rowKey={(employee) => employee.id}
-                    emptyLabel="Aucun employé ne correspond aux filtres."
-                    onRowClick={onSelect}
-                    pagination={false}
-                />
+                <>
+                    <div className="employee-directory-desktop">
+                        <DataTable
+                            columns={columns}
+                            rows={employees.employees}
+                            rowKey={(employee) => employee.id}
+                            emptyLabel="Aucun employé ne correspond aux filtres."
+                            onRowClick={onSelect}
+                            pagination={false}
+                        />
+                    </div>
+                    <div className="employee-directory-mobile">
+                        {employees.employees.length === 0 ? (
+                            <p className="empty-history">Aucun employé ne correspond aux filtres.</p>
+                        ) : (
+                            employees.employees.map((employee) => (
+                                <article className="employee-mobile-card" key={employee.id}>
+                                    <div className="employee-mobile-head">
+                                        <div className="table-person">
+                                            <EmployeeAvatar employee={employee} size="sm" />
+                                            <span>
+                                                <strong>{employee.full_name}</strong>
+                                                <small>{employee.employee_number}</small>
+                                            </span>
+                                        </div>
+                                        <EmployeeStatus employee={employee} />
+                                    </div>
+                                    <dl className="employee-mobile-details">
+                                        <div>
+                                            <dt>Poste</dt>
+                                            <dd>{employee.position_title ?? "—"}</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Direction / département</dt>
+                                            <dd>{employee.department?.name ?? employee.direction?.name ?? "—"}</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Contact</dt>
+                                            <dd>
+                                                {employee.email && <span>{employee.email}</span>}
+                                                {employee.phone && <span>{employee.phone}</span>}
+                                                {!employee.email && !employee.phone && "—"}
+                                            </dd>
+                                        </div>
+                                        {!hideManagementColumns && (
+                                            <div>
+                                                <dt>Responsable direct</dt>
+                                                <dd>{employee.manager?.full_name ?? "—"}</dd>
+                                            </div>
+                                        )}
+                                    </dl>
+                                    <div className="employee-mobile-footer">
+                                        {onSelect && (
+                                            <button
+                                                type="button"
+                                                className="button-secondary compact-button"
+                                                onClick={() => onSelect(employee)}
+                                            >
+                                                Voir la présence
+                                            </button>
+                                        )}
+                                        {(onView || onEdit || onStatusChange || onDelete) && (
+                                            <div className="table-actions">
+                                                {onView && (
+                                                    <button
+                                                        type="button"
+                                                        className="icon-button"
+                                                        aria-label={`Voir ${employee.full_name}`}
+                                                        title="Voir les détails"
+                                                        onClick={() => onView(employee)}
+                                                    >
+                                                        <Eye size={16} aria-hidden />
+                                                    </button>
+                                                )}
+                                                {onEdit && (
+                                                    <button
+                                                        type="button"
+                                                        className="icon-button"
+                                                        aria-label={`Modifier ${employee.full_name}`}
+                                                        title="Modifier"
+                                                        onClick={() => onEdit(employee)}
+                                                    >
+                                                        <Pencil size={16} aria-hidden />
+                                                    </button>
+                                                )}
+                                                {onStatusChange && (
+                                                    <button
+                                                        type="button"
+                                                        className="icon-button"
+                                                        aria-label={employee.status === "active"
+                                                            ? `Désactiver ${employee.full_name}`
+                                                            : `Réactiver ${employee.full_name}`}
+                                                        title={employee.status === "active" ? "Désactiver" : "Réactiver"}
+                                                        onClick={() => onStatusChange(employee)}
+                                                    >
+                                                        {employee.status === "active"
+                                                            ? <UserRoundX size={16} aria-hidden />
+                                                            : <UserRoundCheck size={16} aria-hidden />}
+                                                    </button>
+                                                )}
+                                                {onDelete && (
+                                                    <button
+                                                        type="button"
+                                                        className="icon-button"
+                                                        aria-label={`Supprimer ${employee.full_name}`}
+                                                        title="Supprimer définitivement"
+                                                        onClick={() => onDelete(employee)}
+                                                    >
+                                                        <Trash2 size={16} aria-hidden />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </article>
+                            ))
+                        )}
+                    </div>
+                </>
             )}
             <Pagination
                 currentPage={employees.data?.meta?.current_page ?? 1}

@@ -3,7 +3,7 @@
 import { DataTable, Modal } from "@/components/ui";
 import { formatDate, formatMinutes, formatTime } from "@/lib/formatters";
 import { AttendanceStatus } from "@/components/attendance/AttendanceStatus";
-import { EmployeeAvatar } from "./EmployeeCard";
+import { EmployeeAvatar, EmployeeStatus } from "./EmployeeCard";
 import type { AttendanceEvent, EmployeeAttendanceDetail } from "@/types/attendance";
 import type { Employee } from "@/types/user";
 
@@ -127,5 +127,94 @@ export function EmployeeProfileCard({ employee }: { employee: Employee }) {
                 </div>
             </div>
         </div>
+    );
+}
+
+export function EmployeeInfoModal({
+    employee,
+    onClose,
+}: {
+    employee: Employee | null;
+    onClose: () => void;
+}) {
+    if (!employee) {
+        return null;
+    }
+
+    return (
+        <Modal
+            open
+            title="Fiche de l'employé"
+            subtitle={`${employee.full_name} · ${employee.employee_number}`}
+            onClose={onClose}
+            size="lg"
+        >
+            <div className="profile-panel">
+                <EmployeeAvatar employee={employee} size="lg" />
+                <div className="profile-main">
+                    <h2>{employee.full_name}</h2>
+                    <p>{employee.position_title ?? "Poste non défini"}</p>
+                </div>
+                <EmployeeStatus employee={employee} />
+            </div>
+            <div className="profile-details">
+                <div>
+                    <dt>Matricule</dt>
+                    <dd>{employee.employee_number}</dd>
+                </div>
+                <div>
+                    <dt>Prénom</dt>
+                    <dd>{employee.first_name}</dd>
+                </div>
+                <div>
+                    <dt>Nom</dt>
+                    <dd>{employee.last_name}</dd>
+                </div>
+                <div>
+                    <dt>Email</dt>
+                    <dd>{employee.email ?? "—"}</dd>
+                </div>
+                <div>
+                    <dt>Téléphone</dt>
+                    <dd>{employee.phone ?? "—"}</dd>
+                </div>
+                <div>
+                    <dt>Direction</dt>
+                    <dd>{employee.direction?.name ?? "—"}</dd>
+                </div>
+                <div>
+                    <dt>Département</dt>
+                    <dd>{employee.department?.name ?? "—"}</dd>
+                </div>
+                <div>
+                    <dt>Poste</dt>
+                    <dd>{employee.position_title ?? "—"}</dd>
+                </div>
+                <div>
+                    <dt>Responsable direct</dt>
+                    <dd>{employee.manager?.full_name ?? "—"}</dd>
+                </div>
+                <div>
+                    <dt>Date de recrutement</dt>
+                    <dd>{formatDate(employee.hire_date)}</dd>
+                </div>
+                <div>
+                    <dt>Type de contrat</dt>
+                    <dd>{employee.employment_type ?? "—"}</dd>
+                </div>
+                <div>
+                    <dt>Badge</dt>
+                    <dd>
+                        {employee.badge
+                            ? `${employee.badge.badge_number} (${employee.badge.status})`
+                            : "Aucun badge"}
+                    </dd>
+                </div>
+                <div>
+                    <dt>Statut du compte</dt>
+                    <dd>{employee.status_label}</dd>
+                </div>
+            </div>
+        </Modal>
     );
 }

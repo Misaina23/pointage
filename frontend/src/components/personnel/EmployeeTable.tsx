@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Eye, Pencil, Trash2, UserRoundCheck, UserRoundX } from "lucide-react";
 import { Button, DataTable, Pagination } from "@/components/ui";
 import type { Column } from "@/components/ui";
 import { SearchInput, Select } from "@/components/forms";
@@ -16,13 +17,19 @@ import type { Employee } from "@/types/user";
 export function EmployeeTable({
     employees,
     onSelect,
+    onView,
     onEdit,
     onStatusChange,
+    onDelete,
+    hideManagementColumns = false,
 }: {
     employees: EmployeeDirectoryState;
     onSelect?: (employee: Employee) => void;
+    onView?: (employee: Employee) => void;
     onEdit?: (employee: Employee) => void;
     onStatusChange?: (employee: Employee) => void;
+    onDelete?: (employee: Employee) => void;
+    hideManagementColumns?: boolean;
 }) {
     const [directionId, setDirectionId] = useState("");
 
@@ -57,11 +64,15 @@ export function EmployeeTable({
                 header: "Poste",
                 render: (employee) => employee.position_title ?? "—",
             },
-            {
-                key: "manager",
-                header: "Responsable direct",
-                render: (employee) => employee.manager?.full_name ?? "—",
-            },
+            ...(!hideManagementColumns
+                ? [
+                      {
+                          key: "manager",
+                          header: "Responsable direct",
+                          render: (employee: Employee) => employee.manager?.full_name ?? "—",
+                      } satisfies Column<Employee>,
+                  ]
+                : []),
             {
                 key: "contact",
                 header: "Contact",
@@ -74,44 +85,84 @@ export function EmployeeTable({
                 ),
             },
             {
-                key: "hire",
-                header: "Recrutement",
-                render: (employee) => formatDate(employee.hire_date),
-            },
-            {
                 key: "status",
                 header: "Statut",
                 render: (employee) => <EmployeeStatus employee={employee} />,
             },
-            ...(onEdit || onStatusChange
+            ...(!hideManagementColumns
+                ? [
+                      {
+                          key: "hire",
+                          header: "Recrutement",
+                          render: (employee: Employee) => formatDate(employee.hire_date),
+                      } satisfies Column<Employee>,
+                  ]
+                : []),
+            ...(onView || onEdit || onStatusChange || onDelete
                 ? [
                       {
                           key: "actions",
                           header: "Actions",
                           render: (employee: Employee) => (
                               <div className="table-actions">
+                                  {onView && (
+                                      <button
+                                          type="button"
+                                          className="icon-button"
+                                          aria-label={`Voir ${employee.full_name}`}
+                                          title="Voir les détails"
+                                          onClick={(event) => {
+                                              event.stopPropagation();
+                                              onView(employee);
+                                          }}
+                                      >
+                                          <Eye size={16} aria-hidden />
+                                      </button>
+                                  )}
                                   {onEdit && (
                                       <button
                                           type="button"
-                                          className="text-action"
+                                          className="icon-button"
+                                          aria-label={`Modifier ${employee.full_name}`}
+                                          title="Modifier"
                                           onClick={(event) => {
                                               event.stopPropagation();
                                               onEdit(employee);
                                           }}
                                       >
-                                          Modifier
+                                          <Pencil size={16} aria-hidden />
                                       </button>
                                   )}
                                   {onStatusChange && (
                                       <button
                                           type="button"
-                                          className="text-action"
+                                          className="icon-button"
+                                          aria-label={employee.status === "active"
+                                              ? `Désactiver ${employee.full_name}`
+                                              : `Réactiver ${employee.full_name}`}
+                                          title={employee.status === "active" ? "Désactiver" : "Réactiver"}
                                           onClick={(event) => {
                                               event.stopPropagation();
                                               onStatusChange(employee);
                                           }}
                                       >
-                                          {employee.status === "active" ? "Désactiver" : "Réactiver"}
+                                          {employee.status === "active"
+                                              ? <UserRoundX size={16} aria-hidden />
+                                              : <UserRoundCheck size={16} aria-hidden />}
+                                      </button>
+                                  )}
+                                  {onDelete && (
+                                      <button
+                                          type="button"
+                                          className="icon-button"
+                                          aria-label={`Supprimer ${employee.full_name}`}
+                                          title="Supprimer définitivement"
+                                          onClick={(event) => {
+                                              event.stopPropagation();
+                                              onDelete(employee);
+                                          }}
+                                      >
+                                          <Trash2 size={16} aria-hidden />
                                       </button>
                                   )}
                               </div>
@@ -120,7 +171,7 @@ export function EmployeeTable({
                   ]
                 : []),
         ],
-        [onEdit, onStatusChange],
+        [hideManagementColumns, onView, onEdit, onStatusChange, onDelete],
     );
 
     return (

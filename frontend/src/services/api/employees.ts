@@ -61,3 +61,7 @@ export function updateEmployee(
 export function deactivateEmployee(id: number): Promise<void> {
     return remove<void>(`/employees/${id}`);
 }
+
+export function deleteEmployeePermanently(id: number): Promise<void> {
+    return remove<void>(`/employees/${id}/permanent`);
+}

@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Button, Card, ConfirmDialog } from "@/components/ui";
-import { EmployeeForm, EmployeeTable } from "@/components/personnel";
-import { deactivateEmployee, updateEmployee } from "@/services/api/employees";
+import { EmployeeForm, EmployeeInfoModal, EmployeeTable } from "@/components/personnel";
+import { deactivateEmployee, deleteEmployeePermanently, updateEmployee } from "@/services/api/employees";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useNotifications } from "@/components/providers/NotificationProvider";
 import { EMPLOYEE_STATUSES } from "@/lib/constants";
@@ -16,6 +16,9 @@ export default function AdminUsersPage() {
     const [formOpen, setFormOpen] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
     const [pending, setPending] = useState<Employee | null>(null);
+    const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
+    const [deletingEmployee, setDeletingEmployee] = useState<Employee | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const toggleStatus = async (employee: Employee) => {
         try {
@@ -58,10 +61,13 @@ export default function AdminUsersPage() {
             <Card title="Répertoire" subtitle={`${employees.total} agent(s)`}>
                 <EmployeeTable
                     employees={employees}
+                    hideManagementColumns
+                    onView={setViewingEmployee}
                     onEdit={(employee) => {
                         setEditingEmployee(employee);
                         setFormOpen(true);
                     }}
+                    onDelete={setDeletingEmployee}
                     onStatusChange={(employee) => {
                         if (employee.status === "active") {
                             setPending(employee);
@@ -87,6 +93,11 @@ export default function AdminUsersPage() {
                 />
             )}
 
+            <EmployeeInfoModal
+                employee={viewingEmployee}
+                onClose={() => setViewingEmployee(null)}
+            />
+
             <ConfirmDialog
                 open={pending !== null}
                 title="Désactiver l'employé"
@@ -109,6 +120,37 @@ export default function AdminUsersPage() {
                     }
 
                     setPending(null);
+                }}
+            />
+
+            <ConfirmDialog
+                open={deletingEmployee !== null}
+                title="Supprimer définitivement l'employé"
+                message={`Cette action supprimera définitivement le dossier de ${deletingEmployee?.full_name ?? ""} ainsi que son compte associé. Les dossiers ou comptes liés à des historiques (pointages, congés, permissions, absences, badges, demandes, événements ou actions) ne peuvent pas être supprimés ; désactivez-les à la place.`}
+                confirmLabel="Supprimer définitivement"
+                tone="danger"
+                loading={deleting}
+                onCancel={() => {
+                    if (!deleting) {
+                        setDeletingEmployee(null);
+                    }
+                }}
+                onConfirm={async () => {
+                    if (!deletingEmployee) {
+                        return;
+                    }
+
+                    setDeleting(true);
+                    try {
+                        await deleteEmployeePermanently(deletingEmployee.id);
+                        notify("Dossier et compte supprimés définitivement.", "success");
+                        setDeletingEmployee(null);
+                        employees.reload();
+                    } catch (caught) {
+                        notify(caught instanceof Error ? caught.message : "Suppression impossible.", "error");
+                    } finally {
+                        setDeleting(false);
+                    }
                 }}
             />
         </>

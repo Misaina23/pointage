@@ -41,6 +41,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/dashboard/personal', [DashboardController::class, 'personal'])->name('dashboard.personal');
         Route::get('/dashboard/personal/attendance', [DashboardController::class, 'myAttendance'])->name('dashboard.personal-attendance');
 
+        Route::delete('/employees/{employee}/permanent', [EmployeeController::class, 'permanentlyDestroy'])
+            ->name('employees.permanent-destroy');
         Route::apiResource('employees', EmployeeController::class);
         Route::get('/employees/{employee}/attendance', [AttendanceController::class, 'forEmployee'])->name('employees.attendance');
 

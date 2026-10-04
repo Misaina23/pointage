@@ -6,12 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreEmployeeRequest;
 use App\Http\Requests\Api\V1\UpdateEmployeeRequest;
 use App\Http\Resources\EmployeeResource;
+use App\Models\ApprovalAction;
+use App\Models\ApprovalRequest;
+use App\Models\AttendanceAnomaly;
+use App\Models\AttendanceEvent;
+use App\Models\AuditLog;
 use App\Models\Employee;
+use App\Models\PlanningEvent;
 use App\Services\AuditService;
 use App\Services\EmployeeAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class EmployeeController extends Controller
@@ -114,6 +121,89 @@ class EmployeeController extends Controller
         $employee->forceFill(['status' => 'inactive'])->save();
 
         $this->audit->record('DEACTIVATE_EMPLOYEE', $employee, ['status' => 'active'], ['status' => 'inactive'], $request);
+
+        return response()->json(null, 204);
+    }
+
+    public function permanentlyDestroy(Request $request, Employee $employee): JsonResponse
+    {
+        $this->authorize('delete', $employee);
+
+        /**
+         * @var array{blocked: ?string, photo_path: ?string} $deletion
+         */
+        $deletion = DB::transaction(function () use ($request, $employee): array {
+            $employee = Employee::query()->lockForUpdate()->findOrFail($employee->id);
+            $this->authorize('delete', $employee);
+            $relatedUser = $employee->user;
+
+            if ($relatedUser?->is($request->user())) {
+                return ['blocked' => 'current_account', 'photo_path' => null];
+            }
+
+            $hasOperationalHistory = $employee->badges()->exists()
+                || $employee->attendanceEvents()->exists()
+                || $employee->attendances()->exists()
+                || $employee->leaveRequests()->exists()
+                || $employee->leaveBalances()->exists()
+                || $employee->permissionRequests()->exists()
+                || $employee->absenceRecords()->exists()
+                || $employee->anomalies()->exists()
+                || $employee->directReports()->exists()
+                || $employee->planningEvents()->exists()
+                || ApprovalRequest::query()->where('employee_id', $employee->id)->exists()
+                || ($relatedUser !== null
+                    && (
+                        PlanningEvent::query()->where('created_by', $relatedUser->id)->exists()
+                        || AttendanceEvent::query()->where('scanned_by_user_id', $relatedUser->id)->exists()
+                        || AttendanceAnomaly::query()->where('resolved_by', $relatedUser->id)->exists()
+                        || ApprovalAction::query()->where('actor_user_id', $relatedUser->id)->exists()
+                        || AuditLog::query()->where('actor_user_id', $relatedUser->id)->exists()
+                    ));
+
+            if ($hasOperationalHistory) {
+                return ['blocked' => 'history', 'photo_path' => null];
+            }
+
+            $photoPath = $employee->photo_path;
+            $this->audit->record(
+                'DELETE_EMPLOYEE',
+                $employee,
+                $employee->only(['employee_number', 'first_name', 'last_name', 'email', 'status']),
+                null,
+                $request,
+            );
+
+            if ($relatedUser !== null) {
+                $relatedUser->tokens()->delete();
+                $relatedUser->notifications()->delete();
+                $relatedUser->delete();
+            }
+
+            $employee->delete();
+
+            return ['blocked' => null, 'photo_path' => $photoPath];
+        });
+
+        if ($deletion['blocked'] === 'current_account') {
+            return response()->json([
+                'message' => 'Vous ne pouvez pas supprimer définitivement le dossier associé au compte actuellement connecté.',
+            ], 409);
+        }
+
+        if ($deletion['blocked'] === 'history') {
+            return response()->json([
+                'message' => 'Suppression impossible : ce dossier ou son compte est lié à des données ou à un historique (pointages, badges, congés, permissions, absences, demandes, événements ou actions). Désactivez-le pour conserver ces données.',
+            ], 409);
+        }
+
+        if ($deletion['photo_path'] !== null) {
+            if (! Storage::disk('public')->delete($deletion['photo_path'])) {
+                return response()->json([
+                    'message' => 'Le dossier a été supprimé, mais le nettoyage de sa photo a échoué.',
+                ], 500);
+            }
+        }
 
         return response()->json(null, 204);
     }

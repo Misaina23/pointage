@@ -71,27 +71,6 @@ export function buildUrl(path: string, query?: Query): string {
     return search.length > 0 ? `${url}?${search}` : url;
 }
 
-export async function getCsrfCookie(): Promise<void> {
-    let response: Response;
-
-    try {
-        const apiOrigin = API_BASE_URL.startsWith("/")
-            ? window.location.origin
-            : API_BASE_URL;
-
-        response = await fetch(new URL("/sanctum/csrf-cookie", apiOrigin), {
-            headers: { Accept: "application/json" },
-            credentials: "include",
-        });
-    } catch {
-        throw new ApiError(0, "Impossible de préparer la session sécurisée.");
-    }
-
-    if (!response.ok) {
-        throw new ApiError(response.status, "Impossible de préparer la session sécurisée.");
-    }
-}
-
 async function parseBody(response: Response): Promise<unknown> {
     const text = await response.text();
 
@@ -112,17 +91,6 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     const headers: Record<string, string> = {
         Accept: "application/json",
     };
-
-    if (typeof document !== "undefined" && method !== "GET") {
-        const xsrfCookie = document.cookie
-            .split("; ")
-            .find((cookie) => cookie.startsWith("XSRF-TOKEN="))
-            ?.slice("XSRF-TOKEN=".length);
-
-        if (xsrfCookie) {
-            headers["X-XSRF-TOKEN"] = decodeURIComponent(xsrfCookie);
-        }
-    }
 
     if (!skipAuth) {
         const token = getToken();
@@ -149,7 +117,6 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
             headers,
             body: payload,
             signal,
-            credentials: "include",
         });
     } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {

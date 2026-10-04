@@ -1,11 +1,8 @@
-import { getCsrfCookie } from "@/lib/api";
 import { apiRequest, get, post } from "./client";
 import { clearAuth } from "@/services/storage/authStorage";
 import type { LoginPayload, LoginResponse, SessionUser } from "@/types/auth";
 
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
-    await getCsrfCookie();
-
     return apiRequest<LoginResponse>("/auth/login", {
         method: "POST",
         body: {

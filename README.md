@@ -80,9 +80,10 @@ DB_SSLMODE=require
 ```
 
 Conservez également `APP_KEY` et les paramètres `DB_*` existants dans les variables Render ;
-n'inscrivez aucun secret dans Vercel, Git ou ce fichier. L'API utilise des jetons Bearer, donc le
-domaine Vercel n'a pas besoin d'être ajouté à `SANCTUM_STATEFUL_DOMAINS`. CORS autorise uniquement
-l'origine frontend déclarée et conserve les credentials pour les appels API du navigateur.
+n'inscrivez aucun secret dans Vercel, Git ou ce fichier. L'API utilise des jetons Bearer : elle
+n'utilise pas les sessions Sanctum ni les cookies CSRF. Le client n'envoie donc pas de cookies à
+l'API ; CORS autorise uniquement l'origine frontend déclarée. Ne configurez pas Vercel comme domaine
+stateful Sanctum.
 
 Les tests ne touchent jamais `pointa` : `phpunit.xml` pointe sur la base dédiée `pointa_test`, à créer une fois :
 

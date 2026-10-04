@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class CorsConfigurationTest extends TestCase
 {
-    public function test_vercel_frontend_can_send_credentialed_api_requests(): void
+    public function test_vercel_frontend_can_send_bearer_authenticated_api_requests(): void
     {
         $origin = 'https://pointagemisaina.vercel.app';
 
@@ -20,6 +20,15 @@ class CorsConfigurationTest extends TestCase
 
         $response->assertNoContent()
             ->assertHeader('Access-Control-Allow-Origin', $origin)
-            ->assertHeader('Access-Control-Allow-Credentials', 'true');
+            ->assertHeaderMissing('Access-Control-Allow-Credentials');
+    }
+
+    public function test_vercel_login_does_not_require_a_csrf_session_cookie(): void
+    {
+        $response = $this->withHeader('Origin', 'https://pointagemisaina.vercel.app')
+            ->postJson('/api/v1/auth/login', []);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['email', 'password', 'device_name']);
     }
 }

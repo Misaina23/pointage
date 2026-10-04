@@ -52,6 +52,12 @@ Le conteneur exécute les migrations au démarrage. Pour les lancer séparément
 à plusieurs instances, exécutez-les une seule fois puis démarrez les instances avec `RUN_MIGRATIONS=false`.
 Ne montez pas `backend/.env` dans l'image et ne publiez jamais ses secrets.
 
+Pour une base Render qui contient déjà des tables d'une ancienne version, ne lancez pas les nouvelles
+migrations dans `public` et n'utilisez pas `migrate:fresh`. Créez d'abord un schéma dédié avec
+`CREATE SCHEMA pointa_v2;`, puis définissez `DB_SCHEMA=pointa_v2` dans l'environnement du service.
+Les migrations de cette version seront isolées dans ce schéma ; les anciennes tables restent intactes
+dans `public`. Le transfert des anciennes données vers le nouveau modèle nécessite une migration dédiée.
+
 Les tests ne touchent jamais `pointa` : `phpunit.xml` pointe sur la base dédiée `pointa_test`, à créer une fois :
 
 ```sql

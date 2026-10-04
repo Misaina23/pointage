@@ -15,6 +15,15 @@ case "${RUN_MIGRATIONS:-true}" in
         ;;
 esac
 
+if [ "${RUN_MIGRATIONS:-true}" = "true" ] && [ "${APP_ENV:-production}" = "production" ]; then
+    case "${DB_SCHEMA:-}" in
+        ""|public)
+            echo "DB_SCHEMA must be set to a dedicated schema before production migrations." >&2
+            exit 1
+            ;;
+    esac
+fi
+
 mkdir -p \
     bootstrap/cache \
     storage/app/public \
@@ -29,6 +38,21 @@ chmod -R ug+rwX bootstrap/cache storage
 php artisan package:discover --ansi
 
 if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
+    attempt=0
+
+    until php artisan db:show --no-interaction >/dev/null 2>&1; do
+        attempt=$((attempt + 1))
+
+        if [ "$attempt" -ge 30 ]; then
+            echo "Database is unavailable after 60 seconds; cannot run migrations." >&2
+            php artisan db:show --no-interaction >&2
+            exit 1
+        fi
+
+        echo "Waiting for the database ($attempt/30)..."
+        sleep 2
+    done
+
     php artisan migrate --force
 fi
 

@@ -2,7 +2,9 @@ FROM composer:2 AS composer
 
 FROM php:8.4-apache-bookworm
 
-ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public \
+    APP_ENV=production \
+    APP_DEBUG=false
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \

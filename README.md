@@ -55,8 +55,10 @@ Ne montez pas `backend/.env` dans l'image et ne publiez jamais ses secrets.
 Pour une base Render qui contient déjà des tables d'une ancienne version, ne lancez pas les nouvelles
 migrations dans `public` et n'utilisez pas `migrate:fresh`. Créez d'abord un schéma dédié avec
 `CREATE SCHEMA pointa_v2;`, puis définissez `DB_SCHEMA=pointa_v2` dans l'environnement du service.
-Les migrations de cette version seront isolées dans ce schéma ; les anciennes tables restent intactes
-dans `public`. Le transfert des anciennes données vers le nouveau modèle nécessite une migration dédiée.
+Le conteneur refuse maintenant d'exécuter les migrations de production si `DB_SCHEMA` est absent ou
+vaut `public`, et attend PostgreSQL avant de les lancer. Les nouvelles migrations seront isolées dans
+`pointa_v2` ; les anciennes tables restent intactes dans `public`. Le transfert des anciennes données
+vers le nouveau modèle nécessite une migration dédiée.
 
 Les tests ne touchent jamais `pointa` : `phpunit.xml` pointe sur la base dédiée `pointa_test`, à créer une fois :
 

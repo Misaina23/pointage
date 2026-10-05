@@ -5,7 +5,6 @@ import { useEffect } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { homePathFor } from "@/lib/roles";
 import { Breadcrumb } from "./Breadcrumb";
-import { MobileNav } from "./MobileNav";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { Spinner } from "@/components/ui";
@@ -82,7 +81,7 @@ export function AreaShell({
 
     return (
         <div className="app-shell">
-            <Topbar>
+            <Topbar sections={sections} mobileItems={mobileItems}>
                 <a className="login-button" href={homePath} onClick={(event) => {
                     event.preventDefault();
                     router.push(homePath);
@@ -97,7 +96,6 @@ export function AreaShell({
                     {children}
                 </main>
             </div>
-            <MobileNav items={mobileItems} />
         </div>
     );
 }

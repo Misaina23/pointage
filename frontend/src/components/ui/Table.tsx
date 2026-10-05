@@ -73,7 +73,11 @@ export function DataTable<T>({
                                     className={onRowClick ? "is-clickable" : undefined}
                                 >
                                     {columns.map((column) => (
-                                        <td key={column.key} style={{ textAlign: column.align ?? "left" }}>
+                                        <td
+                                            key={column.key}
+                                            data-label={column.header}
+                                            style={{ textAlign: column.align ?? "left" }}
+                                        >
                                             {column.render(row, (currentPage - 1) * rowsPerPage + index)}
                                         </td>
                                     ))}

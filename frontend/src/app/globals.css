@@ -2288,6 +2288,7 @@ select.form-control {
   height: 100%;
   inset: 0;
   object-fit: cover;
+  object-position: center;
   position: absolute;
   width: 100%;
 }
@@ -2295,8 +2296,12 @@ select.form-control {
 .camera-frame {
   aspect-ratio: 1;
   border: 1px solid var(--pri);
+  display: block;
   height: auto;
-  position: relative;
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
   width: min(68vw, 220px);
   z-index: 1;
 }

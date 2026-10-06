@@ -4075,15 +4075,26 @@ footer a:hover {
   }
 
   .stat-card {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 9px;
+    align-items: center;
+    flex-direction: row;
+    gap: 10px;
     min-height: 0;
     padding: 14px;
   }
 
+  .stat-icon {
+    height: 40px;
+    margin-bottom: 0;
+    width: 40px;
+  }
+
+  .stat-copy {
+    min-width: 0;
+  }
+
   .stat-number {
     font-size: 18px;
+    overflow-wrap: anywhere;
   }
 
   .panel {
@@ -4647,16 +4658,18 @@ footer a:hover {
   }
 
   .login-actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
 
   .login-actions .btn {
-    flex: 1;
-    font-size: 13px;
+    font-size: 12px;
     justify-content: center;
     min-width: 0;
-    padding: 11px 8px;
+    min-height: 46px;
+    padding: 10px 6px;
+    text-align: center;
     white-space: normal;
   }
 
